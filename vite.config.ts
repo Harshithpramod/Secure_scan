@@ -12,6 +12,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Deploy target. The config's default is Cloudflare; this app runs on Vercel.
+  nitro: { preset: "vercel" },
   vite: {
     server: {
       allowedHosts: ["host.docker.internal"],

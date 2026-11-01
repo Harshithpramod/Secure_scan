@@ -271,7 +271,7 @@ function VulnPage() {
                       value={v.status}
                       onValueChange={(status) => updateStatus.mutate({ id: v.id, status })}
                     >
-                      <SelectTrigger className="w-[150px] h-8 text-xs">
+                      <SelectTrigger className="w-[9.375rem] h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -492,7 +492,7 @@ function VulnActivitySection({ vuln }: { vuln: VulnRow }) {
                       type="button"
                       aria-pressed={selectedRun}
                       onClick={() => setChosen(r.jobId)}
-                      className={`cursor-pointer rounded border px-2 py-0.5 text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                      className={`cursor-pointer rounded border px-2 py-0.5 text-[0.6875rem] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
                         selectedRun
                           ? "border-primary-strong bg-primary-strong/15 text-foreground"
                           : "border-border text-muted-foreground hover:bg-muted"
@@ -744,7 +744,7 @@ function SandboxVerificationSection({ vuln }: { vuln: VulnRow }) {
                       {f.tags?.map((t) => (
                         <span
                           key={t}
-                          className="px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase text-[10px]"
+                          className="px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase text-[0.625rem]"
                         >
                           {t.replace(/^external\/cwe\//, "").replace(/^cwe-/, "CWE-")}
                         </span>

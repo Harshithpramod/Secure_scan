@@ -325,7 +325,7 @@ function RepositoriesPage() {
                     <StatusBadge status={r.status} />
                   </div>
                   <div className="hidden w-20 text-right sm:block">
-                    <div className="text-[11px] tracking-wide text-muted-foreground uppercase">
+                    <div className="text-[0.6875rem] tracking-wide text-muted-foreground uppercase">
                       Score
                     </div>
                     <div className="font-semibold text-foreground tabular-nums">

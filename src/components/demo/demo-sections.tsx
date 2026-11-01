@@ -79,7 +79,7 @@ function StatCard({
     tone === "critical" ? "text-critical-fg" : tone === "good" ? "text-low-fg" : "text-foreground";
   return (
     <div className="rounded-xl border border-border bg-card p-5">
-      <div className="text-[11px] tracking-wide text-muted-foreground uppercase">{label}</div>
+      <div className="text-[0.6875rem] tracking-wide text-muted-foreground uppercase">{label}</div>
       <div className={`mt-2 text-3xl font-bold tabular-nums ${valueTone}`}>{value}</div>
       {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
     </div>
@@ -203,7 +203,7 @@ export function DemoDashboard({ onGoTo }: { onGoTo: (s: string) => void }) {
                 </div>
               </div>
               <div className="shrink-0 text-right">
-                <div className="text-[11px] text-muted-foreground">CVSS</div>
+                <div className="text-[0.6875rem] text-muted-foreground">CVSS</div>
                 <div className="text-lg font-bold tabular-nums">{v.cvss_score}</div>
               </div>
             </li>
@@ -252,7 +252,7 @@ export function DemoRepositories({ onNotify }: { onNotify: (m: string) => void }
             <div className="flex shrink-0 items-center gap-3 sm:gap-4">
               <StatusBadge status={r.status} />
               <div className="hidden w-16 text-right sm:block">
-                <div className="text-[11px] tracking-wide text-muted-foreground uppercase">
+                <div className="text-[0.6875rem] tracking-wide text-muted-foreground uppercase">
                   Score
                 </div>
                 <div className="font-semibold tabular-nums">{r.security_score ?? "—"}</div>
@@ -322,7 +322,7 @@ export function DemoScans() {
                     {s.counts.critical} crit · {s.counts.high} high · {s.counts.medium} med
                   </div>
                   <div className="text-right">
-                    <div className="text-[11px] text-muted-foreground">Score</div>
+                    <div className="text-[0.6875rem] text-muted-foreground">Score</div>
                     <div className="font-semibold tabular-nums">{s.security_score ?? "—"}</div>
                   </div>
                   <StatusBadge status={s.status} />
@@ -495,7 +495,7 @@ export function DemoVulnerabilities({ onNotify }: { onNotify: (m: string) => voi
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="text-[11px] text-muted-foreground">CVSS</div>
+                      <div className="text-[0.6875rem] text-muted-foreground">CVSS</div>
                       <div className="text-lg font-bold tabular-nums">{v.cvss_score}</div>
                     </div>
                   </button>
@@ -820,8 +820,8 @@ export function DemoActivity() {
                 {v.file_path}
               </p>
               <div className="mt-1 flex items-center gap-2">
-                <SeverityBadge severity={v.severity} className="text-[10px]" />
-                <span className="text-[11px] text-muted-foreground">{timeAgo(v.detected_at)}</span>
+                <SeverityBadge severity={v.severity} className="text-[0.625rem]" />
+                <span className="text-[0.6875rem] text-muted-foreground">{timeAgo(v.detected_at)}</span>
               </div>
             </div>
           </li>

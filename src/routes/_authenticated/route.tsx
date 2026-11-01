@@ -203,7 +203,7 @@ function NotificationsMenu() {
         >
           <Bell aria-hidden className="h-5 w-5 text-muted-foreground" />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-critical px-1 text-[10px] font-bold text-white">
+            <span className="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-critical px-1 text-[0.625rem] font-bold text-white">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
@@ -262,8 +262,8 @@ function NotificationsMenu() {
                     </p>
                   )}
                   <div className="flex items-center gap-2 mt-1">
-                    <SeverityBadge severity={n.severity} className="text-[10px]" />
-                    <span className="text-[11px] text-muted-foreground">
+                    <SeverityBadge severity={n.severity} className="text-[0.625rem]" />
+                    <span className="text-[0.6875rem] text-muted-foreground">
                       {timeAgo(n.detected_at)}
                     </span>
                   </div>

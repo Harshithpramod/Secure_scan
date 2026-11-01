@@ -84,7 +84,7 @@ function SidebarContent({
       <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-5">
         <Shield aria-hidden className="h-6 w-6 text-accent-fg" strokeWidth={2.5} />
         <span className="text-lg font-bold text-white">PentestAI</span>
-        <span className="ml-auto rounded border border-medium/40 bg-medium/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-medium-fg uppercase">
+        <span className="ml-auto rounded border border-medium/40 bg-medium/15 px-1.5 py-0.5 text-[0.625rem] font-bold tracking-wide text-medium-fg uppercase">
           Demo
         </span>
       </div>
@@ -160,7 +160,7 @@ function DemoPage() {
             </div>
 
             <div className="flex items-center gap-2 md:gap-3">
-              <span className="hidden rounded-md border border-medium/40 bg-medium/15 px-2.5 py-1 text-[11px] font-bold tracking-wide text-medium-fg uppercase sm:inline-flex">
+              <span className="hidden rounded-md border border-medium/40 bg-medium/15 px-2.5 py-1 text-[0.6875rem] font-bold tracking-wide text-medium-fg uppercase sm:inline-flex">
                 Demo mode
               </span>
 
@@ -171,7 +171,7 @@ function DemoPage() {
                 className="relative grid h-11 w-11 cursor-pointer place-items-center rounded-md transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 <Bell aria-hidden className="h-5 w-5 text-muted-foreground" />
-                <span className="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-critical px-1 text-[10px] font-bold text-white">
+                <span className="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-critical px-1 text-[0.625rem] font-bold text-white">
                   7
                 </span>
               </button>

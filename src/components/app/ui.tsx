@@ -32,7 +32,7 @@ export function SeverityBadge({
   const tone = severityTone[severity] ?? severityTone.info;
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded border px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase ${tone} ${className}`}
+      className={`inline-flex shrink-0 items-center rounded border px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide uppercase ${tone} ${className}`}
     >
       {severity}
     </span>
@@ -84,7 +84,7 @@ export function PageShell({
   className?: string;
   width?: "wide" | "narrow";
 }) {
-  const max = width === "narrow" ? "max-w-3xl" : "max-w-[1400px]";
+  const max = width === "narrow" ? "max-w-3xl" : "max-w-[87.5rem]";
   return <div className={`mx-auto w-full ${max} ${className}`}>{children}</div>;
 }
 
@@ -104,7 +104,7 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section className={`rounded-xl border border-border bg-card ${className}`}>
+    <section className={`min-w-0 rounded-xl border border-border bg-card ${className}`}>
       {(title || action) && (
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0">

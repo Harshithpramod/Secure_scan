@@ -42,7 +42,7 @@ function statusOf(run: JobRun): { label: string; className: string } {
 function DiffView({ diff, truncated }: { diff: string; truncated?: boolean }) {
   return (
     <div className="mt-1.5 overflow-x-auto rounded-md border border-border bg-muted/30">
-      <pre className="min-w-max px-3 py-2 text-[11px] leading-5">
+      <pre className="min-w-max px-3 py-2 text-[0.6875rem] leading-5">
         {diff.split("\n").map((l, i) => (
           <div
             key={i}
@@ -146,7 +146,7 @@ function ConsoleLine({
             type="button"
             onClick={() => setDiffOpen((o) => !o)}
             aria-expanded={diffOpen}
-            className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded text-[11px] text-accent-fg hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="mt-1 inline-flex cursor-pointer items-center gap-1 rounded text-[0.6875rem] text-accent-fg hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <ChevronRight
               aria-hidden
@@ -211,7 +211,7 @@ export function SandboxConsole({
           <span className="truncate">sandbox · {container}</span>
         </span>
         <span
-          className={`ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[11px] ${status.className}`}
+          className={`ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[0.6875rem] ${status.className}`}
         >
           {live && (
             <span
@@ -226,7 +226,7 @@ export function SandboxConsole({
 
       {run?.isolation && (
         <details open={!run.finished} className="group border-b border-border px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[0.6875rem] text-muted-foreground select-none hover:text-foreground">
             <ChevronRight
               aria-hidden
               className="h-3 w-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
@@ -234,7 +234,7 @@ export function SandboxConsole({
             <Lock aria-hidden className="h-3 w-3" />
             Isolation — the settings this container actually runs with
           </summary>
-          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[11px]">
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[0.6875rem]">
             {ISOLATION_LABELS.filter(([k]) => run.isolation?.[k]).map(([k, label]) => (
               <div key={k} className="contents">
                 <dt className="text-muted-foreground">{label}</dt>
@@ -254,7 +254,7 @@ export function SandboxConsole({
         className="max-h-96 overflow-y-auto px-3 py-2.5"
       >
         {run ? (
-          <ol role="log" aria-live="polite" className="space-y-1 font-mono text-[11.5px] leading-5">
+          <ol role="log" aria-live="polite" className="space-y-1 font-mono text-[0.71875rem] leading-5">
             {run.lines.map((line) => {
               const m = ATTEMPT_START.exec(line.message);
               return (
@@ -262,7 +262,7 @@ export function SandboxConsole({
                   {m && (
                     <div
                       aria-hidden
-                      className="my-2 flex items-center gap-2 text-[10px] tracking-wide text-muted-foreground uppercase"
+                      className="my-2 flex items-center gap-2 text-[0.625rem] tracking-wide text-muted-foreground uppercase"
                     >
                       <span className="h-px flex-1 bg-border" />
                       Attempt {m[1]} of {m[2]}
@@ -284,7 +284,7 @@ export function SandboxConsole({
             )}
           </ol>
         ) : (
-          <p className="font-mono text-[11.5px] text-muted-foreground">
+          <p className="font-mono text-[0.71875rem] text-muted-foreground">
             {waitingLabel}
             <span aria-hidden className="ml-1 animate-pulse motion-reduce:animate-none">
               ▍

@@ -15,9 +15,10 @@ import { startScan } from "@/lib/scans.functions";
 
 const STORAGE_KEY = "pentestai:chat";
 
-// Matches the h-14 launcher. Needed as a number so a drag can be clamped to
-// the viewport; it can't be inferred from the Tailwind class alone.
-const LAUNCHER_SIZE = 56;
+// Matches the h-[70px] launcher. Needed as a number so a drag can be clamped
+// to the viewport. Pixels, not rem, so the two can't drift apart if the root
+// font size changes (it's 125% — see styles.css). 70 = the old 56 × 1.25.
+const LAUNCHER_SIZE = 70;
 // Remembers a position the user dragged the launcher to.
 const POSITION_KEY = "pentestai:chat-position";
 // Gap between the launcher and its hover greeting.
@@ -360,10 +361,10 @@ export function ChatWidget() {
             // Anchored to whichever corner the launcher currently occupies, so
             // the panel opens away from the viewport edge rather than off it.
             style={{
-              [isTop ? "top" : "bottom"]: `${LAUNCHER_SIZE + 40}px`,
+              [isTop ? "top" : "bottom"]: `${LAUNCHER_SIZE + 50}px`,
               [isLeft ? "left" : "right"]: "1rem",
             }}
-            className="fixed z-50 flex h-[560px] max-h-[70vh] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl sm:w-[380px]"
+            className="fixed z-50 flex h-[35rem] max-h-[70vh] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl sm:w-[23.75rem]"
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-2">
@@ -441,7 +442,7 @@ export function ChatWidget() {
                           Run a scan on{" "}
                           <span className="font-mono font-medium">{m.scan.repositoryName}</span>?
                         </p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        <p className="mt-0.5 text-[0.6875rem] text-muted-foreground">
                           This starts a real pen test against the repository.
                         </p>
                         <div className="mt-2 flex gap-2">
@@ -592,7 +593,7 @@ export function ChatWidget() {
         style={anchorStyle}
         // bg-black matches the orb clip's own background, so the video reads as
         // the button itself rather than as a video pasted onto a coloured disc.
-        className={`fixed z-50 grid h-14 w-14 touch-none place-items-center rounded-full bg-black text-white shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none ${
+        className={`fixed z-50 grid h-[70px] w-[70px] touch-none place-items-center rounded-full bg-black text-white shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none ${
           anchorStyle ? "" : "right-4 bottom-6 sm:right-6"
         } ${
           dragging

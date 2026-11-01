@@ -466,13 +466,13 @@ function ScanConsole() {
           <Terminal aria-hidden className="h-3.5 w-3.5" />
           sandbox · runner-01
         </span>
-        <span className="font-mono ml-auto flex items-center gap-1.5 text-[11px] text-low">
+        <span className="font-mono ml-auto flex items-center gap-1.5 text-[0.6875rem] text-low">
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-low" />
           live
         </span>
       </div>
 
-      <div className="font-mono relative overflow-hidden p-4 text-[12.5px] leading-[1.9] sm:p-5">
+      <div className="font-mono relative overflow-hidden p-4 text-[0.78125rem] leading-[1.9] sm:p-5">
         {/* A single scan sweep as the log finishes writing — on-theme for a
             scanner, and it runs exactly once rather than on a loop. */}
         {!reduce && (
@@ -526,7 +526,7 @@ function FindingCard() {
         animate={show ? { opacity: 1 } : { opacity: 0 }}
         transition={{ duration: 0.4, ease: EASE }}
       >
-        <span className="rounded border border-critical/30 bg-critical/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-critical uppercase">
+        <span className="rounded border border-critical/30 bg-critical/10 px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide text-critical uppercase">
           Critical
         </span>
         <span className="font-mono text-xs text-landing-fg-muted">CWE-798</span>
@@ -553,7 +553,7 @@ function FindingCard() {
         </StaggerItem>
 
         <StaggerItem>
-          <p className="font-mono text-[11px] tracking-[0.14em] text-landing-fg-muted uppercase">
+          <p className="font-mono text-[0.6875rem] tracking-[0.14em] text-landing-fg-muted uppercase">
             Evidence
           </p>
           <p className="mt-2 text-sm leading-relaxed text-landing-fg-secondary">
@@ -563,7 +563,7 @@ function FindingCard() {
         </StaggerItem>
 
         <StaggerItem>
-          <p className="font-mono text-[11px] tracking-[0.14em] text-landing-fg-muted uppercase">
+          <p className="font-mono text-[0.6875rem] tracking-[0.14em] text-landing-fg-muted uppercase">
             Remediation
           </p>
           <ol className="mt-2 space-y-1.5 text-sm leading-relaxed text-landing-fg-secondary">
@@ -638,7 +638,7 @@ function Landing() {
 
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-landing-border bg-landing-bg/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-4 px-6">
+        <div className="mx-auto flex h-16 max-w-[75rem] items-center justify-between gap-4 px-6">
           <Link
             to="/"
             className="focus-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm"
@@ -765,7 +765,7 @@ function Landing() {
           )}
           <SectionGlow />
 
-          <div className="relative mx-auto grid max-w-[1200px] items-center gap-14 px-6 py-20 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-32">
+          <div className="relative mx-auto grid max-w-[75rem] items-center gap-14 px-6 py-20 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-32">
             <motion.div style={reduce ? undefined : { y: copyY, opacity: copyFade }}>
               <motion.p
                 {...heroIn(0)}
@@ -846,7 +846,7 @@ function Landing() {
           {/* Padding lives on the wrapper, not the grid: a padded grid with
               gap-px + a background paints the gutters in border colour and
               leaves visible slabs down both edges. */}
-          <div className="mx-auto max-w-[1200px] px-6">
+          <div className="mx-auto max-w-[75rem] px-6">
             <Stagger
               as="dl"
               gap={0.09}
@@ -873,7 +873,7 @@ function Landing() {
         {/* Product surface */}
         <section className="relative overflow-hidden border-b border-landing-border">
           <SectionGlow />
-          <div className="mx-auto grid max-w-[1200px] items-center gap-12 px-6 py-20 md:py-28 lg:grid-cols-[1fr_1.1fr] lg:gap-16">
+          <div className="mx-auto grid max-w-[75rem] items-center gap-12 px-6 py-20 md:py-28 lg:grid-cols-[1fr_1.1fr] lg:gap-16">
             <div>
               <SectionHeading
                 eyebrow="What you get back"
@@ -917,7 +917,7 @@ function Landing() {
         {/* Features */}
         <section id="features" className="relative overflow-hidden border-b border-landing-border">
           <SectionGlow />
-          <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
+          <div className="mx-auto max-w-[75rem] px-6 py-20 md:py-28">
             <SectionHeading
               eyebrow="Capabilities"
               title="Key features"
@@ -954,7 +954,7 @@ function Landing() {
         {/* How it works */}
         <section id="how" className="relative overflow-hidden border-b border-landing-border">
           <SectionGlow />
-          <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
+          <div className="mx-auto max-w-[75rem] px-6 py-20 md:py-28">
             <SectionHeading
               eyebrow="Process"
               title="How it works"
@@ -996,7 +996,7 @@ function Landing() {
         {/* Coverage */}
         <section id="coverage" className="relative overflow-hidden border-b border-landing-border">
           <SectionGlow />
-          <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
+          <div className="mx-auto max-w-[75rem] px-6 py-20 md:py-28">
             <SectionHeading
               eyebrow="Coverage"
               title="Weakness classes we hunt for."
@@ -1034,7 +1034,7 @@ function Landing() {
             the same one finishing. */}
         <section className="relative overflow-hidden border-b border-landing-border">
           <SectionGlow />
-          <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
+          <div className="mx-auto max-w-[75rem] px-6 py-20 md:py-28">
             <Reveal y={26}>
               <div className="relative overflow-hidden rounded-2xl border border-landing-border bg-landing-surface px-6 py-16 text-center sm:px-12">
                 {/* Dots first, then the purple over them — the same order the
@@ -1107,7 +1107,7 @@ function Landing() {
 
       {/* Footer */}
       <footer className="bg-landing-bg">
-        <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-5 px-6 py-10 md:flex-row">
+        <div className="mx-auto flex max-w-[75rem] flex-col items-center justify-between gap-5 px-6 py-10 md:flex-row">
           <div className="flex items-center gap-2">
             <Shield aria-hidden className="h-5 w-5 text-landing-accent" />
             <span className="font-display font-semibold text-landing-fg">PentestAI</span>

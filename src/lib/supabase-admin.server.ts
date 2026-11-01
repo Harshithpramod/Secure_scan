@@ -20,7 +20,9 @@ let cached: AdminClient | null = null;
 export function getSupabaseAdmin(): AdminClient {
   if (cached) return cached;
   const url = process.env.SUPABASE_URL;
-  const serviceKey = process.env.PENTEST_SUPABASE_SERVICE_ROLE_KEY;
+  // SUPABASE_SERVICE_ROLE_KEY is the name Vercel's Supabase integration sets.
+  const serviceKey =
+    process.env.PENTEST_SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
     throw new Error(
       "Missing SUPABASE_URL or PENTEST_SUPABASE_SERVICE_ROLE_KEY. Set the service role key in Project Secrets.",

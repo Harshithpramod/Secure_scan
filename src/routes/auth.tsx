@@ -200,7 +200,7 @@ function AuthPage() {
                   is the kind of thing this product exists to flag in other
                   people's software. */}
               <div className="mt-7 border-t border-landing-border pt-6">
-                <h2 className="font-mono text-[11px] tracking-[0.14em] text-landing-fg-muted uppercase">
+                <h2 className="font-mono text-[0.6875rem] tracking-[0.14em] text-landing-fg-muted uppercase">
                   What PentestAI gets
                 </h2>
                 <ul className="mt-4 space-y-4">
@@ -216,7 +216,7 @@ function AuthPage() {
                         <p className="mt-0.5 text-xs leading-relaxed text-landing-fg-secondary">
                           {s.detail}
                         </p>
-                        <code className="mt-1 inline-block font-mono text-[11px] text-landing-fg-muted">
+                        <code className="mt-1 inline-block font-mono text-[0.6875rem] text-landing-fg-muted">
                           {s.name}
                         </code>
                       </div>

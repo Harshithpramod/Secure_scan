@@ -196,6 +196,11 @@
        header — without it a section lands underneath the nav. */
     scroll-behavior: smooth;
     scroll-padding-top: 5rem;
+    /* Renders the site at 125% by default. Pages can't set browser zoom, and
+       CSS `zoom` breaks 100vh sections and fixed elements, so instead every
+       rem-based size (all of Tailwind's) scales from this. A percentage keeps
+       the visitor's own font-size preference in the calculation. */
+    font-size: 125%;
   }
 
   html,

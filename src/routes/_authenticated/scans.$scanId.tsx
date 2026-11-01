@@ -143,7 +143,7 @@ function ScanDetailPage() {
             Refresh
           </button>
         </div>
-        <div className="max-h-[500px] overflow-y-auto font-mono text-xs">
+        <div className="max-h-[31.25rem] overflow-y-auto font-mono text-xs">
           {logs.length === 0 ? (
             <div className="p-6 text-center text-muted-foreground">No logs yet.</div>
           ) : (

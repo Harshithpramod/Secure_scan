@@ -1,0 +1,13 @@
+# The Vercel CLI uploads everything not listed here (it does not read
+# .gitignore). Secrets go in Vercel's Environment Variables, never the upload.
+.env
+.env.*
+**/.env
+**/.env.*
+# Runs on Docker, not Vercel. Leading / = project root only: a bare
+# `supabase/` also matched src/integrations/supabase/ and broke the build.
+/sandbox/
+/supabase/
+.output/
+.vercel/
+node_modules/

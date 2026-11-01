@@ -41,3 +41,9 @@ sandbox/.env.*
 
 # Local-only Compose overrides (host ports, plain HTTP)
 docker-compose.override.yml
+
+.vercel
+
+.vercel
+.env*
+.claude/
