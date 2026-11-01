@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { Loader2, Github, CheckCircle2, KeyRound, Copy, Plus } from "lucide-react";
+import { Loader2, Github, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { connectGithubPat, disconnectGithub, getGithubStatus } from "@/lib/github.functions";
-import { createApiKey, listApiKeys, revokeApiKey } from "@/lib/apikeys.functions";
-import { formatDistanceToNow } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -47,32 +45,43 @@ function SettingsPage() {
 
   const [fullName, setFullName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
-  const [ack, setAck] = useState(false);
+  // True once the user edits a field and until the save lands. Guards against
+  // a background refetch (React Query refetches on window focus, reconnect and
+  // remount) replacing half-typed input with the stale server value — the
+  // fields would appear to blank themselves mid-edit.
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    if (data?.profile) {
+    if (data?.profile && !dirty) {
       setFullName(data.profile.full_name ?? "");
       setJobTitle(data.profile.job_title ?? "");
-      setAck(!!data.profile.authorization_ack);
     }
+    // `dirty` is intentionally not a dependency: this should re-seed when
+    // server data arrives, not the moment editing stops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.profile]);
 
   const saveProfile = useMutation({
     mutationFn: async () => {
-      if (!data?.userId) return;
-      const { error } = await supabase
+      if (!data?.userId) throw new Error("Not signed in — reload the page and try again.");
+      // upsert, not update: a missing profiles row (possible if the signup
+      // trigger never ran for this account) makes update a silent no-op.
+      // .select() then tells us how many rows were actually written — without
+      // it, PostgREST returns 204 with no body and a zero-row write is
+      // indistinguishable from success, so the UI would claim "Profile saved"
+      // while nothing changed.
+      const { data: rows, error } = await supabase
         .from("profiles")
-        .update({
-          full_name: fullName,
-          job_title: jobTitle,
-          authorization_ack: ack,
-          authorization_ack_at: ack ? new Date().toISOString() : null,
-        })
-        .eq("id", data.userId);
+        .upsert({ id: data.userId, full_name: fullName, job_title: jobTitle }, { onConflict: "id" })
+        .select("id");
       if (error) throw error;
+      if (!rows || rows.length === 0) {
+        throw new Error("Nothing was saved — the profile row could not be written.");
+      }
     },
     onSuccess: () => {
       toast.success("Profile saved");
+      setDirty(false);
       qc.invalidateQueries({ queryKey: ["settings"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -123,7 +132,10 @@ function SettingsPage() {
             <Input
               id="fullName"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                setDirty(true);
+              }}
               className="mt-1"
             />
           </div>
@@ -132,22 +144,13 @@ function SettingsPage() {
             <Input
               id="jobTitle"
               value={jobTitle}
-              onChange={(e) => setJobTitle(e.target.value)}
+              onChange={(e) => {
+                setJobTitle(e.target.value);
+                setDirty(true);
+              }}
               className="mt-1"
             />
           </div>
-          <label
-            htmlFor="authorization-ack"
-            className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 transition-colors hover:bg-accent/40"
-          >
-            <Switch id="authorization-ack" checked={ack} onCheckedChange={setAck} />
-            <div>
-              <div className="text-sm font-medium">Authorization acknowledgement</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                I confirm I only scan repositories I own or am authorized to test.
-              </p>
-            </div>
-          </label>
           <Button
             onClick={() => saveProfile.mutate()}
             disabled={saveProfile.isPending}
@@ -187,7 +190,6 @@ function SettingsPage() {
       </section>
 
       <GithubSection />
-      <ApiKeysSection />
     </div>
   );
 }
@@ -275,124 +277,6 @@ function GithubSection() {
             {connect.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Connect
           </Button>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ApiKeysSection() {
-  const qc = useQueryClient();
-  const listFn = useServerFn(listApiKeys);
-  const createFn = useServerFn(createApiKey);
-  const revokeFn = useServerFn(revokeApiKey);
-  const [name, setName] = useState("");
-  const [freshKey, setFreshKey] = useState<string | null>(null);
-
-  const { data: keys = [], isLoading } = useQuery({
-    queryKey: ["api-keys"],
-    queryFn: () => listFn(),
-  });
-
-  const create = useMutation({
-    mutationFn: (n: string) => createFn({ data: { name: n } }),
-    onSuccess: (r: any) => {
-      setFreshKey(r.key);
-      setName("");
-      qc.invalidateQueries({ queryKey: ["api-keys"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const revoke = useMutation({
-    mutationFn: (id: string) => revokeFn({ data: { id } }),
-    onSuccess: () => {
-      toast.success("Key revoked");
-      qc.invalidateQueries({ queryKey: ["api-keys"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <section className="rounded-lg border border-border bg-card p-6">
-      <h2 className="font-semibold mb-2 flex items-center gap-2">
-        <KeyRound className="h-4 w-4" /> API keys
-      </h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Use API keys to trigger scans from CI. Only a hash is stored — the key is shown once.
-      </p>
-
-      <div className="flex gap-2 mb-4">
-        <Input
-          placeholder="Key name (e.g. CI pipeline)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Button
-          onClick={() => create.mutate(name)}
-          disabled={!name || create.isPending}
-          className=""
-        >
-          {create.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Plus className="h-4 w-4 mr-2" />
-          )}
-          Create
-        </Button>
-      </div>
-
-      {freshKey && (
-        <div className="mb-4 rounded-md border border-primary/40 bg-primary/10 p-3">
-          <div className="text-xs text-muted-foreground mb-2">
-            Copy this key now — it will not be shown again.
-          </div>
-          <div className="flex items-center gap-2">
-            <code className="text-sm font-mono break-all">{freshKey}</code>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                navigator.clipboard.writeText(freshKey);
-                toast.success("Copied");
-              }}
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : keys.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No API keys yet.</p>
-      ) : (
-        <div className="divide-y divide-border">
-          {keys.map((k: any) => (
-            <div key={k.id} className="py-2 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{k.name}</div>
-                <div className="text-xs text-muted-foreground font-mono">
-                  {k.key_prefix}…{" "}
-                  <span className="font-sans">
-                    created {formatDistanceToNow(new Date(k.created_at), { addSuffix: true })}
-                    {k.revoked_at ? " · revoked" : ""}
-                  </span>
-                </div>
-              </div>
-              {!k.revoked_at && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => revoke.mutate(k.id)}
-                  disabled={revoke.isPending}
-                >
-                  Revoke
-                </Button>
-              )}
-            </div>
-          ))}
         </div>
       )}
     </section>

@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
-  Plus,
   Github,
   Trash2,
   Loader2,
@@ -11,22 +10,25 @@ import {
   Download,
   CheckCircle2,
   ShieldAlert,
+  Clock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listGithubRepos, importGithubRepo, getGithubStatus } from "@/lib/github.functions";
 import { startScan } from "@/lib/scans.functions";
+
+/** One entry from listGithubRepos — the shape importGithubRepo expects. */
+type GithubRepo = Awaited<ReturnType<typeof listGithubRepos>>[number];
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, SkeletonRows, EmptyState, PageShell } from "@/components/app/ui";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -43,9 +45,7 @@ export const Route = createFileRoute("/_authenticated/repositories")({
 function RepositoriesPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [manualOpen, setManualOpen] = useState(false);
   const [browseOpen, setBrowseOpen] = useState(false);
-  const [url, setUrl] = useState("");
   const [search, setSearch] = useState("");
   const [scanningId, setScanningId] = useState<string | null>(null);
 
@@ -67,7 +67,7 @@ function RepositoriesPage() {
     },
   });
 
-  const importedFullNames = useMemo(() => new Set(repos.map((r: any) => r.full_name)), [repos]);
+  const importedFullNames = useMemo(() => new Set(repos.map((r) => r.full_name)), [repos]);
 
   const {
     data: ghRepos = [],
@@ -84,11 +84,11 @@ function RepositoriesPage() {
   const filteredGhRepos = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return ghRepos;
-    return ghRepos.filter((r: any) => r.full_name.toLowerCase().includes(q));
+    return ghRepos.filter((r) => r.full_name.toLowerCase().includes(q));
   }, [ghRepos, search]);
 
   const importRepo = useMutation({
-    mutationFn: (repo: any) =>
+    mutationFn: (repo: GithubRepo) =>
       importGithubRepo({
         data: {
           github_repo_id: repo.github_repo_id,
@@ -100,7 +100,7 @@ function RepositoriesPage() {
           language: repo.language,
         },
       }),
-    onSuccess: (_d, repo: any) => {
+    onSuccess: (_d, repo) => {
       toast.success(`Imported ${repo.full_name}`);
       qc.invalidateQueries({ queryKey: ["repositories"] });
     },
@@ -109,7 +109,7 @@ function RepositoriesPage() {
 
   const importAll = useMutation({
     mutationFn: async () => {
-      const toImport = filteredGhRepos.filter((r: any) => !importedFullNames.has(r.full_name));
+      const toImport = filteredGhRepos.filter((r) => !importedFullNames.has(r.full_name));
       for (const r of toImport) {
         await importGithubRepo({
           data: {
@@ -132,32 +132,6 @@ function RepositoriesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const addManual = useMutation({
-    mutationFn: async (repoUrl: string) => {
-      const m = repoUrl.trim().match(/github\.com[:/]([^/]+)\/([^/.\s]+)/);
-      if (!m) throw new Error("Enter a valid GitHub URL like https://github.com/owner/repo");
-      const [, owner, name] = m;
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Not signed in");
-      const { error } = await supabase.from("repositories").insert({
-        user_id: userData.user.id,
-        owner,
-        name,
-        full_name: `${owner}/${name}`,
-        default_branch: "main",
-        status: "never_scanned",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Repository added");
-      qc.invalidateQueries({ queryKey: ["repositories"] });
-      setManualOpen(false);
-      setUrl("");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   const removeRepo = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("repositories").delete().eq("id", id);
@@ -175,15 +149,32 @@ function RepositoriesPage() {
       setScanningId(repositoryId);
       return startScan({ data: { repositoryId } });
     },
-    onSuccess: (res: any) => {
-      toast.success(`Scan complete — ${res.findings} finding(s), score ${res.score}`);
+    onSuccess: (res) => {
+      // The scan runs in the sandbox now, so this returns as soon as the job
+      // is queued — findings arrive later via the callback. The scan detail
+      // page streams progress, so send the user straight there.
+      toast.success("Scan queued — following its progress.");
       qc.invalidateQueries({ queryKey: ["repositories"] });
       qc.invalidateQueries({ queryKey: ["scans"] });
-      qc.invalidateQueries({ queryKey: ["vulnerabilities"] });
       navigate({ to: "/scans/$scanId", params: { scanId: res.scanId } });
     },
     onError: (e: Error) => toast.error(e.message),
     onSettled: () => setScanningId(null),
+  });
+
+  const setWeeklyMode = useMutation({
+    mutationFn: async ({ id, weekly }: { id: string; weekly: boolean }) => {
+      const { error } = await supabase
+        .from("repositories")
+        .update({ scan_mode: weekly ? "weekly" : "manual" } as never)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, { weekly }) => {
+      toast.success(weekly ? "Weekly auto-scan enabled" : "Weekly auto-scan disabled");
+      qc.invalidateQueries({ queryKey: ["repositories"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -244,7 +235,7 @@ function RepositoriesPage() {
                       No repositories found on GitHub.
                     </div>
                   ) : (
-                    filteredGhRepos.map((r: any) => {
+                    filteredGhRepos.map((r) => {
                       const imported = importedFullNames.has(r.full_name);
                       return (
                         <div
@@ -284,47 +275,6 @@ function RepositoriesPage() {
               </div>
             </DialogContent>
           </Dialog>
-
-          <Dialog open={manualOpen} onOpenChange={setManualOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" /> Add by URL
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add GitHub repository</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="repo-url">GitHub URL</Label>
-                  <Input
-                    id="repo-url"
-                    placeholder="https://github.com/owner/repo"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Only add repositories you own or are authorized to test.
-                  </p>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setManualOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  disabled={addManual.isPending}
-                  onClick={() => addManual.mutate(url)}
-                  className=""
-                >
-                  {addManual.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Add
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -353,7 +303,7 @@ function RepositoriesPage() {
           />
         ) : (
           <div className="divide-y divide-border">
-            {repos.map((r: any) => (
+            {repos.map((r) => (
               <div key={r.id} className="p-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-10 w-10 rounded-lg bg-primary/15 text-accent-fg grid place-items-center">
@@ -382,6 +332,18 @@ function RepositoriesPage() {
                       {r.security_score ?? "—"}
                     </div>
                   </div>
+                  <label
+                    htmlFor={`weekly-${r.id}`}
+                    className="hidden cursor-pointer items-center gap-2 sm:flex"
+                    title="Automatically re-scan this repository roughly once a week"
+                  >
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Switch
+                      id={`weekly-${r.id}`}
+                      checked={r.scan_mode === "weekly"}
+                      onCheckedChange={(v) => setWeeklyMode.mutate({ id: r.id, weekly: v })}
+                    />
+                  </label>
                   <Button
                     variant="outline"
                     size="sm"

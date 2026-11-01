@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   FileText,
@@ -13,9 +13,22 @@ import {
   ShieldX,
   ShieldAlert,
   Loader2,
+  GitPullRequest,
+  Sparkles,
+  ExternalLink,
+  RotateCcw,
+  EyeOff,
+  History,
+  Terminal,
 } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
+import { requestVulnerabilityFix } from "@/lib/fixes.functions";
+import { groupJobRuns, toTimeline } from "@/lib/activity-format";
+import { useJobLogs, useVulnerabilityEvents } from "@/hooks/use-vuln-activity";
+import { SandboxConsole } from "@/components/app/sandbox-console";
+import { VulnerabilityTimeline } from "@/components/app/vuln-timeline";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { SeverityBadge, StatusBadge, SkeletonRows, EmptyState } from "@/components/app/ui";
@@ -70,9 +83,32 @@ function VerificationBadge({ status }: { status: string }) {
   );
 }
 
+const fixConfig: Record<string, { label: string; color: string; icon: typeof Shield }> = {
+  pending: { label: "Generating fix…", color: "text-accent-fg", icon: Loader2 },
+  pr_created: { label: "Fix PR open", color: "text-low", icon: GitPullRequest },
+  failed: { label: "Fix failed", color: "text-medium", icon: ShieldX },
+};
+
+function FixStatusBadge({ status }: { status: string }) {
+  const cfg = fixConfig[status];
+  if (!cfg) return null;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs ${cfg.color}`}>
+      <Icon className={`h-3 w-3 ${status === "pending" ? "animate-spin" : ""}`} />
+      {cfg.label}
+    </span>
+  );
+}
+
+/** A vulnerability row plus the repository name the list query joins in. */
+type VulnRow = Tables<"vulnerabilities"> & {
+  repositories: { full_name: string } | null;
+};
+
 function VulnPage() {
   const [filter, setFilter] = useState<(typeof severities)[number]>("all");
-  const [selected, setSelected] = useState<any>(null);
+  const [selected, setSelected] = useState<VulnRow | null>(null);
   const qc = useQueryClient();
 
   const { data: vulns = [], isLoading } = useQuery({
@@ -86,8 +122,10 @@ function VulnPage() {
       return data;
     },
     refetchInterval: (q) => {
-      const items = (q.state.data as any[]) ?? [];
-      const hasPending = items.some((v: any) => v.verification_status === "pending");
+      const items = (q.state.data as VulnRow[]) ?? [];
+      const hasPending = items.some(
+        (v) => v.verification_status === "pending" || v.fix_status === "pending",
+      );
       return hasPending ? 5000 : false;
     },
   });
@@ -112,7 +150,7 @@ function VulnPage() {
   // Keep dialog data fresh when the list refreshes
   useEffect(() => {
     if (!selected) return;
-    const fresh = vulns.find((v: any) => v.id === selected.id);
+    const fresh = vulns.find((v) => v.id === selected.id);
     if (fresh && fresh !== selected) setSelected(fresh);
   }, [vulns, selected]);
 
@@ -135,7 +173,23 @@ function VulnPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const filtered = filter === "all" ? vulns : vulns.filter((v: any) => v.severity === filter);
+  const requestFix = useMutation({
+    mutationFn: async (vulnerabilityId: string) =>
+      requestVulnerabilityFix({ data: { vulnerabilityId } }),
+    onSuccess: () => {
+      toast.success(
+        "Generating a fix — it will be re-scanned, and a pull request opens only if it passes.",
+      );
+      qc.invalidateQueries({ queryKey: ["vulnerabilities"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Rows merged into another finding (same issue, reported twice) are kept for
+  // their history but not listed. Filtered here rather than in the query so
+  // the page still works before the lifecycle migration adds the column.
+  const canonical = vulns.filter((v) => !v.duplicate_of);
+  const filtered = filter === "all" ? canonical : canonical.filter((v) => v.severity === filter);
 
   return (
     <div className="space-y-4">
@@ -164,7 +218,7 @@ function VulnPage() {
           />
         ) : (
           <div className="divide-y divide-border">
-            {filtered.map((v: any) => (
+            {filtered.map((v) => (
               <div
                 key={v.id}
                 role="button"
@@ -184,6 +238,8 @@ function VulnPage() {
                       {v.verification_status && v.verification_status !== "unverified" && (
                         <VerificationBadge status={v.verification_status} />
                       )}
+                      <FixStatusBadge status={v.fix_status} />
+                      <LifecycleBadges vuln={v} />
                     </div>
                     <div className="font-medium">{v.title}</div>
                     {v.description && (
@@ -303,7 +359,7 @@ function VulnPage() {
                   {Array.isArray(selected.remediation_steps) &&
                   selected.remediation_steps.length > 0 ? (
                     <ol className="list-decimal ml-5 space-y-1 text-muted-foreground">
-                      {selected.remediation_steps.map((s: any, i: number) => (
+                      {selected.remediation_steps.map((s, i: number) => (
                         <li key={i}>{typeof s === "string" ? s : JSON.stringify(s)}</li>
                       ))}
                     </ol>
@@ -333,8 +389,16 @@ function VulnPage() {
                   </p>
                 </div>
 
+                <AiFixSection
+                  vuln={selected}
+                  pending={requestFix.isPending}
+                  onRequest={() => requestFix.mutate(selected.id)}
+                />
+
+                <VulnActivitySection vuln={selected} />
+
                 <div className="flex justify-end pt-1">
-                  <Button asChild>
+                  <Button asChild variant="outline">
                     <Link to="/reports">
                       <FileText className="h-4 w-4 mr-2" /> View report
                     </Link>
@@ -349,6 +413,206 @@ function VulnPage() {
   );
 }
 
+/** Where this finding is in its life across scans, at a glance. */
+function LifecycleBadges({ vuln }: { vuln: VulnRow }) {
+  const active = vuln.status === "open" || vuln.status === "in_progress";
+  const regressions = vuln.regression_count ?? 0;
+  const missed = vuln.missed_scans ?? 0;
+  return (
+    <>
+      {regressions > 0 && active && (
+        <span className="inline-flex items-center gap-1 text-xs text-critical">
+          <RotateCcw className="h-3 w-3" />
+          Regressed{regressions > 1 ? ` ×${regressions}` : ""}
+        </span>
+      )}
+      {missed > 0 && active && (
+        <span
+          className="inline-flex items-center gap-1 text-xs text-medium"
+          title="The latest scan read this file and didn't report this finding. One more clean scan marks it fixed."
+        >
+          <EyeOff className="h-3 w-3" />
+          Not seen in latest scan
+        </span>
+      )}
+    </>
+  );
+}
+
+const JOB_LABEL = { fix: "AI fix", verify: "Verification" } as const;
+
+/**
+ * The live sandbox console for this finding's verify/fix jobs, and its
+ * timeline across scans. The in-flight job is shown automatically; earlier
+ * runs stay available.
+ */
+function VulnActivitySection({ vuln }: { vuln: VulnRow }) {
+  const fixPending = vuln.fix_status === "pending";
+  const verifyPending = vuln.verification_status === "pending";
+  const inFlight = fixPending || verifyPending;
+  const { data: logs = [] } = useJobLogs(vuln.id, { active: inFlight });
+  const { data: events = [] } = useVulnerabilityEvents(vuln.id, { poll: inFlight });
+
+  const runs = useMemo(() => groupJobRuns(logs), [logs]);
+  const timeline = useMemo(() => toTimeline(events, vuln.detected_at), [events, vuln.detected_at]);
+
+  const liveJobId = fixPending ? vuln.fix_job_id : verifyPending ? vuln.sandbox_job_id : null;
+  const [chosen, setChosen] = useState<string | null>(null);
+  // A job starting takes over the console, whatever run was picked before.
+  useEffect(() => setChosen(null), [liveJobId]);
+
+  const liveRun = liveJobId ? (runs.find((r) => r.jobId === liveJobId) ?? null) : null;
+  const shown = chosen
+    ? (runs.find((r) => r.jobId === chosen) ?? null)
+    : liveJobId
+      ? liveRun
+      : (runs[0] ?? null);
+  const waiting =
+    !chosen && liveJobId && !liveRun
+      ? fixPending
+        ? "Queued. Waiting for the sandbox to start the fixer…"
+        : "Queued. Waiting for the sandbox to start verification…"
+      : undefined;
+
+  return (
+    <>
+      {(runs.length > 0 || waiting) && (
+        <section className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Terminal className="h-3.5 w-3.5" /> Sandbox activity
+            </span>
+            {runs.length > 1 && (
+              <div className="ml-auto flex flex-wrap gap-1" role="group" aria-label="Sandbox runs">
+                {runs.slice(0, 6).map((r) => {
+                  const selectedRun = (shown?.jobId ?? null) === r.jobId && !waiting;
+                  return (
+                    <button
+                      key={r.jobId}
+                      type="button"
+                      aria-pressed={selectedRun}
+                      onClick={() => setChosen(r.jobId)}
+                      className={`cursor-pointer rounded border px-2 py-0.5 text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                        selectedRun
+                          ? "border-primary-strong bg-primary-strong/15 text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {JOB_LABEL[r.kind]} · {format(new Date(r.startedAt), "MMM d, p")}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <SandboxConsole run={waiting ? null : shown} waitingLabel={waiting} />
+        </section>
+      )}
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <History className="h-3.5 w-3.5" /> Timeline
+        </div>
+        <VulnerabilityTimeline items={timeline} />
+      </section>
+    </>
+  );
+}
+
+/**
+ * "Fix with AI" — offered on any open finding, including unverified ones: an
+ * AI-only finding still has a real description to fix from, and the PR is a
+ * review gate either way. Never gated on verification_status.
+ */
+function AiFixSection({
+  vuln,
+  pending,
+  onRequest,
+}: {
+  vuln: VulnRow;
+  pending: boolean;
+  onRequest: () => void;
+}) {
+  const status: string = vuln.fix_status ?? "none";
+  const inFlight = status === "pending" || pending;
+  const canFix = Boolean(vuln.file_path);
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Sparkles className="h-3.5 w-3.5" /> AI remediation
+      </div>
+
+      {status === "pr_created" && vuln.fix_pr_url ? (
+        <>
+          <div className="flex items-center gap-2">
+            <GitPullRequest className="h-4 w-4 text-low" />
+            <span className="font-medium text-low">
+              Pull request {vuln.fix_pr_number ? `#${vuln.fix_pr_number}` : ""} opened
+            </span>
+            {vuln.fix_completed_at && (
+              <span className="text-xs text-muted-foreground">
+                · {format(new Date(vuln.fix_completed_at), "PPp")}
+              </span>
+            )}
+          </div>
+          {vuln.suggested_fix_diff && (
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+              {vuln.suggested_fix_diff}
+            </p>
+          )}
+          <p className="text-xs text-medium">
+            This patch was generated by an AI model and hasn&apos;t been compiled or tested. Review
+            it before merging.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm">
+              <a href={vuln.fix_pr_url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" /> View PR
+              </a>
+            </Button>
+            <Button size="sm" variant="outline" onClick={onRequest} disabled={inFlight}>
+              <RotateCcw className="h-4 w-4 mr-2" /> Generate another
+            </Button>
+          </div>
+        </>
+      ) : inFlight ? (
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin text-accent-fg" />
+          <span className="text-accent-fg font-medium">Generating and re-scanning fix…</span>
+          <span className="text-xs text-muted-foreground">
+            A pull request opens only if the patched code passes a re-scan.
+          </span>
+        </div>
+      ) : (
+        <>
+          {status === "failed" && vuln.fix_error && (
+            <p className="text-xs text-medium bg-muted/60 border border-border rounded p-2 whitespace-pre-wrap">
+              {vuln.fix_error}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {canFix
+              ? "Generate a patch, re-scan the repository with it applied, and open a pull request only if the finding is gone. Nothing is committed to your default branch."
+              : "This finding isn't tied to a specific file, so there's nothing to patch automatically."}
+          </p>
+          <Button size="sm" onClick={onRequest} disabled={!canFix}>
+            {status === "failed" ? (
+              <>
+                <RotateCcw className="h-4 w-4 mr-2" /> Retry fix
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-2" /> Fix with AI
+              </>
+            )}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // The sandbox runs one of three engines depending on probe type (CodeQL,
 // semgrep, or trufflehog for secrets), and each emits a differently-shaped
 // "details" payload. Best-effort normalize the common ones into a single
@@ -358,6 +622,9 @@ function normalizeFinding(
   item: unknown,
 ): { title: string; location?: string; tags?: string[] } | null {
   if (!item || typeof item !== "object") return null;
+  // Arbitrary CodeQL/semgrep/trufflehog output — genuinely untyped, and every
+  // read below is already guarded. `any` is the honest type for it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = item as Record<string, any>;
 
   // CodeQL (via sarif_verdict.py): {rule, message, locations: [{file, line}], tags}
@@ -385,7 +652,7 @@ function normalizeFinding(
   return null;
 }
 
-function SandboxVerificationSection({ vuln }: { vuln: any }) {
+function SandboxVerificationSection({ vuln }: { vuln: VulnRow }) {
   const status: string = vuln.verification_status ?? "unverified";
   const cfg = verificationConfig[status] ?? verificationConfig.unverified;
   const Icon = cfg.icon;
@@ -394,16 +661,21 @@ function SandboxVerificationSection({ vuln }: { vuln: any }) {
     return null;
   }
 
-  const rawFindings: unknown[] = Array.isArray(vuln.verification_details?.results)
-    ? vuln.verification_details.results
-    : Array.isArray(vuln.verification_details?.matches)
-      ? vuln.verification_details.matches
+  // The column is Json; the sandbox writes one of these two shapes.
+  const details = vuln.verification_details as {
+    results?: unknown[];
+    matches?: unknown[];
+    count?: number;
+  } | null;
+  const rawFindings: unknown[] = Array.isArray(details?.results)
+    ? details.results
+    : Array.isArray(details?.matches)
+      ? details.matches
       : [];
   const findings = rawFindings
     .map(normalizeFinding)
     .filter((f): f is NonNullable<typeof f> => f !== null);
-  const findingCount: number | undefined =
-    vuln.verification_details?.count ?? (rawFindings.length || undefined);
+  const findingCount: number | undefined = details?.count ?? (rawFindings.length || undefined);
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">

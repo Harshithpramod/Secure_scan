@@ -38,3 +38,6 @@ sandbox/.env.*
 *.njsproj
 *.sln
 *.sw?
+
+# Local-only Compose overrides (host ports, plain HTTP)
+docker-compose.override.yml

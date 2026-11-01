@@ -1,8 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Shield, Github } from "lucide-react";
+import {
+  Shield,
+  Github,
+  Loader2,
+  ArrowLeft,
+  Eye,
+  UserRound,
+  Lock,
+  CheckCircle2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
@@ -17,6 +25,32 @@ export const Route = createFileRoute("/auth")({
   }),
   component: AuthPage,
 });
+
+/**
+ * What the OAuth call actually asks for, spelled out at the point of decision.
+ * The scopes below must stay in sync with the `scopes` string in handleGithub —
+ * a disclosure that drifts from the real request is worse than none at all.
+ */
+const SCOPES = [
+  {
+    icon: Eye,
+    name: "repo",
+    label: "Read your repository code",
+    detail: "So it can be analysed and re-checked in the sandbox.",
+  },
+  {
+    icon: UserRound,
+    name: "read:user · user:email",
+    label: "Your GitHub username and email",
+    detail: "Used to create your account. Nothing else.",
+  },
+];
+
+const GUARANTEES = [
+  "Your code is never modified",
+  "Analysis runs with no network access",
+  "Findings are encrypted at rest",
+];
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -48,7 +82,11 @@ function AuthPage() {
       },
     });
     if (error || !data?.url) {
-      toast.error(error?.message ?? "Failed to start GitHub sign-in");
+      toast.error(
+        error?.message
+          ? `Couldn't start GitHub sign-in. ${error.message}`
+          : "Couldn't start GitHub sign-in. Try again.",
+      );
       setLoading(false);
       return;
     }
@@ -56,11 +94,13 @@ function AuthPage() {
     if (inIframe) {
       const opened = window.open(data.url, "_blank", "noopener,noreferrer");
       if (!opened) {
-        toast.error("Popup blocked. Open the preview in a new tab, then try again.");
+        toast.error(
+          "Your browser blocked the GitHub window. Allow popups for this site, or open the preview in a new tab.",
+        );
         setLoading(false);
         return;
       }
-      toast.info("Complete GitHub sign-in in the new tab, then return here.");
+      toast.info("Finish signing in on the GitHub tab, then come back here.");
       setLoading(false);
     } else {
       window.location.href = data.url;
@@ -68,62 +108,149 @@ function AuthPage() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4"
-      style={{ backgroundColor: "var(--color-marketing-bg)" }}
-    >
-      <div className="absolute inset-0 grid-bg opacity-40" />
-      <div className="relative w-full max-w-md rounded-xl border border-marketing-border bg-marketing-card p-8">
-        <Link to="/" className="flex items-center gap-2 mb-8">
-          <Shield className="h-6 w-6 text-primary" strokeWidth={2.5} />
-          <span className="font-bold text-white text-lg">PentestAI</span>
+    <div className="relative min-h-screen overflow-hidden bg-landing-bg px-4 py-10">
+      {/* Same light source as the homepage hero, so arriving here reads as the
+          same product rather than a separate form page. Static CSS — nothing to
+          gate behind prefers-reduced-motion.
+
+          Dimmed to 70%: the hero can run this at full strength because its copy
+          sits well above the cores, but here the column is vertically centred,
+          which puts the small print near the brightest part. At full strength
+          the disclaimer measured 2.16:1. */}
+      <div aria-hidden className="landing-glow pointer-events-none absolute inset-0 opacity-70" />
+
+      <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md flex-col justify-center">
+        {/* -mx-2 px-2 keeps the visual size of the wordmark while giving the hit
+            area the full 44px minimum. */}
+        <Link
+          to="/"
+          className="focus-ring -mx-2 mb-8 inline-flex min-h-11 w-fit items-center gap-2 rounded-md px-2 text-landing-fg-secondary transition-colors hover:text-landing-fg"
+        >
+          <ArrowLeft aria-hidden className="h-4 w-4" />
+          <Shield aria-hidden className="h-5 w-5 text-landing-accent" strokeWidth={2.5} />
+          <span className="font-display text-lg font-bold text-landing-fg">PentestAI</span>
         </Link>
 
-        <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-        <p className="mt-1 text-sm text-marketing-muted">
-          Sign in with GitHub to run penetration tests on your repositories.
-        </p>
+        <div className="rounded-2xl border border-landing-border bg-landing-surface p-8">
+          {existingEmail ? (
+            /* A live session makes the sign-in button noise: the only two
+               things worth offering are "carry on" and "not me". */
+            <>
+              <h1 className="font-display text-2xl font-semibold tracking-[-0.02em] text-landing-fg">
+                You&apos;re already signed in
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-landing-fg-secondary">
+                Signed in as <span className="font-medium text-landing-fg">{existingEmail}</span>.
+              </p>
 
-        {existingEmail && (
-          <div className="mt-6 rounded-lg border border-marketing-border bg-black/40 p-4">
-            <p className="text-sm text-white">
-              You're already signed in as <span className="font-semibold">{existingEmail}</span>
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button
+              <button
                 type="button"
                 onClick={() => navigate({ to: "/dashboard", replace: true })}
-                className="h-9 flex-1 bg-primary hover:bg-primary-hover"
+                className="focus-ring mt-6 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-landing-primary font-medium text-white transition-colors hover:bg-landing-primary-hover"
               >
-                Continue
-              </Button>
-              <Button
+                Continue to dashboard
+              </button>
+              <button
                 type="button"
-                variant="outline"
                 disabled={loading}
                 onClick={handleSwitchAccount}
-                className="h-9 flex-1 border-marketing-border text-white hover:bg-white/10"
+                className="focus-ring mt-3 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-landing-border text-sm font-medium text-landing-fg-secondary transition-colors hover:border-landing-border-strong hover:text-landing-fg disabled:opacity-60"
               >
-                Use another account
-              </Button>
-            </div>
-          </div>
-        )}
+                {loading ? (
+                  <>
+                    <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                    Signing out…
+                  </>
+                ) : (
+                  "Use a different account"
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <h1 className="font-display text-2xl leading-[1.15] font-semibold tracking-[-0.02em] text-landing-fg">
+                Scan your first repository
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-landing-fg-secondary">
+                Sign in with GitHub to connect a repository and get a sandbox-verified report.
+              </p>
 
-        <Button
-          type="button"
-          onClick={handleGithub}
-          disabled={loading}
-          className="mt-6 w-full h-11 bg-[#24292f] text-white hover:bg-[#24292f]/90"
-        >
-          <Github className="h-4 w-4 mr-2" />
-          Continue with GitHub
-        </Button>
+              <button
+                type="button"
+                onClick={handleGithub}
+                disabled={loading}
+                aria-busy={loading}
+                className="focus-ring mt-7 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-landing-primary font-medium text-white transition-colors hover:bg-landing-primary-hover disabled:opacity-70"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                    Redirecting to GitHub…
+                  </>
+                ) : (
+                  <>
+                    <Github aria-hidden className="h-4 w-4" />
+                    Continue with GitHub
+                  </>
+                )}
+              </button>
 
-        <p className="mt-6 text-center text-xs text-marketing-muted">
-          Only scan repositories you own or are authorized to test.
+              {/* The substantive addition. `repo` is a broad, write-capable
+                  scope covering private code — asking for it without saying so
+                  is the kind of thing this product exists to flag in other
+                  people's software. */}
+              <div className="mt-7 border-t border-landing-border pt-6">
+                <h2 className="font-mono text-[11px] tracking-[0.14em] text-landing-fg-muted uppercase">
+                  What PentestAI gets
+                </h2>
+                <ul className="mt-4 space-y-4">
+                  {SCOPES.map((s) => (
+                    <li key={s.name} className="flex gap-3">
+                      <s.icon
+                        aria-hidden
+                        className="mt-0.5 h-4 w-4 shrink-0 text-landing-accent"
+                        strokeWidth={2}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-landing-fg">{s.label}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-landing-fg-secondary">
+                          {s.detail}
+                        </p>
+                        <code className="mt-1 inline-block font-mono text-[11px] text-landing-fg-muted">
+                          {s.name}
+                        </code>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Inside the card rather than floating under it: these sit on
+                    the solid surface, which both keeps them next to the
+                    permission they answer and gives them a backdrop that isn't
+                    the glow. */}
+                <ul className="mt-6 space-y-2 border-t border-landing-border pt-5">
+                  {GUARANTEES.map((g) => (
+                    <li
+                      key={g}
+                      className="flex items-center gap-2 text-xs text-landing-fg-secondary"
+                    >
+                      <CheckCircle2 aria-hidden className="h-3.5 w-3.5 shrink-0 text-low" />
+                      {g}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* fg-secondary, not fg-muted: this line sits outside the card, over the
+            glow, where muted measured 2.16:1. */}
+        <p className="mt-6 flex items-start gap-2 text-xs leading-relaxed text-landing-fg-secondary">
+          <Lock aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Only scan repositories you own or are explicitly authorised to test.
         </p>
-      </div>
+      </main>
     </div>
   );
 }

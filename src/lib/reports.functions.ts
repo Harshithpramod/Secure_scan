@@ -1,3 +1,5 @@
+import type { AdminClient } from "@/lib/supabase-admin.server";
+
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
@@ -9,7 +11,7 @@ function scoreFromCounts(counts: Record<Sev, number>) {
   return Math.max(0, Math.min(100, 100 - penalty));
 }
 
-async function buildPayload(supabaseAdmin: any, scanId: string, userId: string) {
+async function buildPayload(supabaseAdmin: AdminClient, scanId: string, userId: string) {
   const { data: scan } = await supabaseAdmin
     .from("scans")
     .select("*, repositories(id, full_name, owner, name, default_branch, language)")
@@ -18,13 +20,17 @@ async function buildPayload(supabaseAdmin: any, scanId: string, userId: string) 
     .maybeSingle();
   if (!scan) throw new Error("Scan not found");
 
-  const { data: vulns } = await supabaseAdmin
-    .from("vulnerabilities")
-    .select("*")
-    .eq("scan_id", scanId)
-    .order("cvss_score", { ascending: false });
-
-  const list = (vulns ?? []) as any[];
+  // Every finding present in this scan, not just the ones it detected first —
+  // findings carry across scans, so a re-scan's report would otherwise be empty.
+  const { findingsForScans } = await import("@/lib/vuln-lifecycle.server");
+  const { rows } = await findingsForScans<{ id: string; scan_id: string | null }>(
+    supabaseAdmin,
+    [scanId],
+    "*",
+  );
+  const list = [...(rows as any[])].sort(
+    (a, b) => (Number(b.cvss_score) || 0) - (Number(a.cvss_score) || 0),
+  );
   const counts: Record<Sev, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const v of list) counts[(v.severity as Sev) ?? "info"] += 1;
 
@@ -87,7 +93,7 @@ export const generateReport = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => z.object({ scanId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
+    const supabaseAdmin = getSupabaseAdmin();
     const payload = await buildPayload(supabaseAdmin, data.scanId, context.userId);
 
     const { data: existing } = await supabaseAdmin
@@ -126,7 +132,7 @@ export const getReportPayload = createServerFn({ method: "GET" })
   .inputValidator((data: unknown) => z.object({ scanId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
+    const supabaseAdmin = getSupabaseAdmin();
     return buildPayload(supabaseAdmin, data.scanId, context.userId);
   });
 
@@ -134,7 +140,7 @@ export const listCompletedScans = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
+    const supabaseAdmin = getSupabaseAdmin();
     const { data } = await supabaseAdmin
       .from("scans")
       .select(

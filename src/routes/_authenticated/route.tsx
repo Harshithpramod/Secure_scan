@@ -28,6 +28,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { User } from "@supabase/supabase-js";
 import { SeverityBadge, Skeleton } from "@/components/app/ui";
+import { ChatWidget } from "@/components/app/chat-widget";
+import { Onboarding } from "@/components/app/onboarding";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -91,6 +93,7 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
               key={item.to}
               to={item.to}
               onClick={onNavigate}
+              data-tour={item.to.replace("/", "")}
               aria-current={active ? "page" : undefined}
               // bg-primary + white measured 4.23:1 — below AA. primary-strong
               // is the same hue at 5.70:1.
@@ -137,12 +140,27 @@ function timeAgo(iso: string) {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+// Marks how far the user has read. Stored locally rather than in the database
+// so it needs no migration and no write on every glance; the trade-off is that
+// "read" is per-browser, which is the normal expectation for a bell badge.
+const READ_AT_KEY = "pentestai:notifications-read-at";
+
+function readNotificationsReadAt(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    return Number(window.localStorage.getItem(READ_AT_KEY)) || 0;
+  } catch {
+    return 0; // private mode / storage disabled — treat everything as unread
+  }
+}
+
 function NotificationsMenu() {
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readAt, setReadAt] = useState<number>(readNotificationsReadAt);
 
   const load = async () => {
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("vulnerabilities")
       .select("id,title,severity,detected_at,file_path")
       .in("severity", ["critical", "high"])
@@ -158,18 +176,35 @@ function NotificationsMenu() {
   }, []);
 
   const criticalCount = items.filter((i) => i.severity === "critical").length;
+  // Only findings detected since the last time the panel was opened count as
+  // unread, so the badge clears on read and reappears for genuinely new ones.
+  const unreadCount = items.filter((i) => new Date(i.detected_at).getTime() > readAt).length;
+
+  const markAllRead = () => {
+    const now = Date.now();
+    setReadAt(now);
+    try {
+      window.localStorage.setItem(READ_AT_KEY, String(now));
+    } catch {
+      /* storage unavailable — the badge simply won't persist as read */
+    }
+  };
 
   return (
-    <Popover>
+    <Popover
+      onOpenChange={(isOpen) => {
+        if (isOpen) markAllRead();
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           className="relative grid h-11 w-11 cursor-pointer place-items-center rounded-md transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          aria-label="Notifications"
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         >
           <Bell aria-hidden className="h-5 w-5 text-muted-foreground" />
-          {items.length > 0 && (
+          {unreadCount > 0 && (
             <span className="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-critical px-1 text-[10px] font-bold text-white">
-              {items.length > 9 ? "9+" : items.length}
+              {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
         </button>
@@ -263,7 +298,7 @@ function AuthLayout() {
     supabase.auth.getUser().then(async ({ data }) => {
       setUser(data.user);
       if (!data.user) return;
-      const { data: p } = await (supabase as any)
+      const { data: p } = await supabase
         .from("profiles")
         .select("full_name,avatar_url,github_username")
         .eq("id", data.user.id)
@@ -316,6 +351,7 @@ function AuthLayout() {
                   className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                 />
                 <Input
+                  data-tour="search"
                   aria-label="Search"
                   placeholder="Search..."
                   className="h-11 w-56 border-border bg-card pl-9"
@@ -324,6 +360,7 @@ function AuthLayout() {
               <NotificationsMenu />
               <Link
                 to="/settings"
+                data-tour="account"
                 aria-label="Account settings"
                 className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border-l border-border py-1 pr-1 pl-2 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
@@ -350,6 +387,9 @@ function AuthLayout() {
           <Outlet />
         </main>
       </div>
+
+      <ChatWidget />
+      <Onboarding />
     </div>
   );
 }

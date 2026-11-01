@@ -31,21 +31,14 @@ export const saveGithubOAuthToken = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => oauthSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { user, scopes } = await fetchGithubUser(data.providerToken);
-    const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
-    const { error } = await supabaseAdmin.from("github_connections").upsert(
-      {
-        user_id: context.userId,
-        github_user_id: user.id,
-        github_username: user.login,
-        access_token_encrypted: data.providerToken,
-
-        scopes: scopes.length ? scopes : ["oauth"],
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
-    if (error) throw error;
+    const { storeUserAccessToken } = await import("@/lib/github-token.server");
+    await storeUserAccessToken({
+      userId: context.userId,
+      token: data.providerToken,
+      githubUserId: user.id,
+      githubUsername: user.login,
+      scopes: scopes.length ? scopes : ["oauth"],
+    });
     return { username: user.login, scopes };
   });
 
@@ -72,20 +65,14 @@ export const connectGithubPat = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => patSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { user, scopes } = await verifyPat(data.token);
-    const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
-    const { error } = await supabaseAdmin.from("github_connections").upsert(
-      {
-        user_id: context.userId,
-        github_user_id: user.id,
-        github_username: user.login,
-        access_token_encrypted: data.token,
-        scopes: scopes.length ? scopes : ["classic-pat"],
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
-    if (error) throw error;
+    const { storeUserAccessToken } = await import("@/lib/github-token.server");
+    await storeUserAccessToken({
+      userId: context.userId,
+      token: data.token,
+      githubUserId: user.id,
+      githubUsername: user.login,
+      scopes: scopes.length ? scopes : ["classic-pat"],
+    });
     return { username: user.login, scopes };
   });
 
@@ -93,7 +80,7 @@ export const disconnectGithub = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from("github_connections")
       .delete()
@@ -106,7 +93,7 @@ export const getGithubStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from("github_connections")
       .select("github_username, scopes, connected_at")
@@ -116,22 +103,10 @@ export const getGithubStatus = createServerFn({ method: "GET" })
     return data;
   });
 
-async function getUserAccessToken(userId: string): Promise<string> {
-  const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-  const supabaseAdmin = getSupabaseAdmin() as any;
-  const { data, error } = await supabaseAdmin
-    .from("github_connections")
-    .select("access_token_encrypted")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.access_token_encrypted) throw new Error("GitHub is not connected");
-  return data.access_token_encrypted as string;
-}
-
 export const listGithubRepos = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { getUserAccessToken } = await import("@/lib/github-token.server");
     const token = await getUserAccessToken(context.userId);
     const repos: Array<{
       id: number;
@@ -190,7 +165,7 @@ export const importGithubRepo = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
-    const supabaseAdmin = getSupabaseAdmin() as any;
+    const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin.from("repositories").upsert(
       {
         user_id: context.userId,

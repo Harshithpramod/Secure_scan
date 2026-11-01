@@ -14,17 +14,28 @@ looks suspicious.
 
 ```
 GitHub repo
-    │  read-only clone
+    │  the app queues a scan job and returns immediately
     ▼
-LLM static analysis  ──►  regex secret scan (runs first, catches committed .env files)
+Sandbox worker
+    │  regex secret scan (runs first, catches committed .env files)
+    │  LLM static analysis
+    │
+    ├─ HMAC-signed progress callbacks ──►  live stage + % on the scan page
+    │
+    ▼
+HMAC-signed result callback  ──►  app writes findings
     │
     │  high + critical findings only
     ▼
-Sandbox (self-hosted, isolated)
+Sandbox runner (isolated, no network)
     │  CodeQL security-extended · dataflow/taint tracking
     ▼
 HMAC-signed callback  ──►  verdict + evidence written to the finding
 ```
+
+The scan itself runs as a queued job rather than inside the HTTP request that
+started it, so a large repository can't run into a serverless CPU or wall-time
+limit, and closing the browser tab doesn't abandon the work.
 
 The verification step is the point of the project. Pattern matching can tell
 you a line _looks_ like a SQL query; it can't tell you whether user input
@@ -41,6 +52,98 @@ code is safe" are not the same answer.
 | `failed`          | The probe errored — inconclusive, **not** a clean bill of health. |
 | `pending`         | Submitted to the sandbox, awaiting a result.                      |
 
+## Fix with AI
+
+Any open finding tied to a file can be handed back to an LLM to patch. The fix
+runs in the same sandbox, in its own ephemeral container, and always arrives as
+a **pull request** — never a direct commit to your default branch, so there is
+a human review gate between the model and your code.
+
+```
+finding  ──►  fixer container (isolated, egress-only to GitHub + OpenRouter)
+                  │  read current default-branch tip + current file
+                  │  LLM patches that one file
+                  │  re-scan the repo with the patch applied ◄──┐
+                  │  still flagged / new vuln? → retry with ─────┘
+                  │  the re-scan's findings (max FIX_MAX_ATTEMPTS)
+                  ▼  passed
+              blob → tree → commit → branch → PR
+                  │
+              HMAC-signed callback ──►  fix_status + PR link on the finding
+```
+
+- **A PR only opens if the patch passes a re-scan.** The fixer re-runs the
+  scanner on the repository with the patch applied. If the finding is still
+  reported, or the patch introduced a new medium-or-higher finding, the model is
+  told why and retries (default 3 attempts). If nothing passes, no PR is opened
+  and the finding shows the reason.
+- The re-scan is static analysis, not a test run: nothing is compiled or
+  executed, and AI results vary between runs. That's why the original is
+  scanned twice and every patch must pass two re-scans. Review the PR before
+  merging.
+- **Watch it live:** every fix and verification job streams its progress
+  into the finding's dialog: the container's isolation settings, each
+  attempt's diff, and each re-scan's verdict. Secret-looking values are
+  redacted before they leave the sandbox.
+- **Quota:** a fix uses up to 8 Gemini calls (default settings). The Gemini
+  free tier allows only 20 `gemini-2.5-flash` requests per day, shared with
+  scans, so enable billing on the key for anything beyond a demo.
+- It always reads the branch tip as it is _now_, not the commit the scan ran
+  against, so a fix requested weeks later doesn't revert intervening work.
+- Needs a GitHub token with the `repo` scope, and `OPENROUTER_API_KEY` set on
+  the sandbox. Without the key, fix jobs return a clear "not configured"
+  verdict; verification is unaffected.
+- Only one fix runs per finding at a time; requesting a second while one is
+  pending is rejected rather than opening a duplicate PR.
+
+## Weekly scans
+
+A repository switched to "Auto-scan weekly" on the Repositories page gets
+re-scanned automatically, roughly every `WEEKLY_SWEEP_INTERVAL_HOURS`. Off
+(`scan_mode = 'manual'`) by default for every repository — auto-scanning
+costs a GitHub API pass and an LLM call per repo, so nothing runs until you
+opt a repo in.
+
+```
+sandbox worker (pings hourly, holds no memory of "last run" —
+                the sandbox's Redis isn't persisted)
+    │  POST /api/public/run-weekly-scans   (Bearer: SANDBOX_API_TOKEN)
+    ▼
+app: which weekly-mode repos have last_scan_at older than the interval
+     (or have never been scanned)? triggers each exactly like the
+     "Scan" button does, tagged trigger='scheduled'
+    ▼
+...normal scan + verify flow...
+    ▼
+once every scan AND every verification from that run is done,
+one digest email per user (gated on the "Weekly summary" toggle in Settings)
+```
+
+The interval check lives in the app, against `repositories.last_scan_at`
+(durable in Postgres), not in the worker — a worker restart must not cause an
+early re-trigger, and the sandbox's Redis is deliberately non-persistent (see
+"Credential handling" in `sandbox/README.md`), so the worker can't be trusted
+to remember anything across a restart either.
+
+**Local testing without waiting a week**: set `WEEKLY_SWEEP_INTERVAL_HOURS=0`
+in the app's `.env`, flip a test repo to weekly mode, then either wait for the
+worker's next hourly ping or trigger one on demand:
+
+```bash
+curl -X POST -H "Authorization: Bearer $SANDBOX_API_TOKEN" $APP_URL/api/public/run-weekly-scans
+```
+
+**Local testing of the email itself** without a real mailbox: run
+[Mailpit](https://github.com/axllent/mailpit) (open source, MIT-licensed fake
+SMTP server + web UI):
+
+```bash
+docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
+
+Point `SMTP_HOST=localhost`, `SMTP_PORT=1025`, `SMTP_SECURE=false` at it — sent
+mail shows up at `http://localhost:8025` instead of leaving the machine.
+
 ## Stack
 
 | Layer     | Choice                                                           |
@@ -48,7 +151,7 @@ code is safe" are not the same answer.
 | Framework | TanStack Start (React 19, TypeScript)                            |
 | Styling   | Tailwind CSS v4, shadcn/ui, Lucide icons                         |
 | Backend   | Supabase — Postgres with row-level security, Auth (GitHub OAuth) |
-| AI        |  Gemini                          |
+| AI        | Gemini                                                           |
 | Deploy    | Nitro → Cloudflare Workers                                       |
 | Sandbox   | Docker Compose — Caddy, Fastify, Redis, worker, one-shot runner  |
 | Analysis  | CodeQL (JS/TS, Python) · semgrep · trufflehog3                   |
@@ -72,13 +175,37 @@ PENTEST_SUPABASE_SERVICE_ROLE_KEY=<service role key>
 # Client-side equivalents
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
-     # preferred
-GEMINI_API_KEY=<key>           # fallback for local dev
+
+# AI
+GEMINI_API_KEY=<key>
+
+# Encrypts GitHub tokens at rest. REQUIRED — connecting GitHub fails without
+# it. Losing or changing it means every user must reconnect GitHub.
+TOKEN_ENCRYPTION_KEY=<openssl rand -hex 32>
 
 # Sandbox (optional — scans still run, findings stay unverified without it)
 SANDBOX_URL=https://sandbox.example.com
 SANDBOX_API_TOKEN=<openssl rand -hex 32>
 CALLBACK_HMAC_SECRET=<openssl rand -hex 32>
+
+# Public base URL of this deployment. Used to build links in emails and
+# authenticate the sandbox's weekly-scan requests (see "Weekly scans" below).
+APP_URL=http://localhost:8080
+
+# Email (weekly digest). Optional — without it, weekly scans still run, they
+# just don't email anyone. nodemailer + SMTP; any provider works, including a
+# local Mailpit instance for testing (see "Weekly scans" below).
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM="PentestAI <alerts@example.com>"
+# "true" for implicit TLS (port 465). Auto-detected from the port otherwise.
+SMTP_SECURE=
+
+# How long a repository in weekly mode can go unscanned before it's due
+# again. Blank = 168 (7 days). Lower this for local testing.
+WEEKLY_SWEEP_INTERVAL_HOURS=
 ```
 
 `.env` is gitignored. Never commit it — the service role key bypasses every
@@ -111,6 +238,7 @@ npm run dev
 | `npm run dev`     | Dev server                            |
 | `npm run build`   | Production build (Nitro → Cloudflare) |
 | `npm run preview` | Preview the build                     |
+| `npm run test`    | Vitest (app + sandbox modules)        |
 | `npm run lint`    | ESLint                                |
 | `npm run format`  | Prettier                              |
 
@@ -129,8 +257,14 @@ takes a few minutes.
 cd sandbox
 cp .env.example .env        # fill in, generate secrets with: openssl rand -hex 32
 docker build -t pentestai/runner:latest runners
+docker build -t pentestai/fixer:latest -f fixer/Dockerfile .   # context is sandbox/, see note
 docker compose --env-file .env up -d --build
 ```
+
+The `fixer` image handles "Fix with AI" jobs. Unlike the runner it needs
+outbound network (GitHub + OpenRouter), so it runs on its own `fixer_net`
+bridge rather than the runner's zero-egress network — `sandbox/README.md` has
+the smoke test that proves `fixer_net` still can't reach the rest of the stack.
 
 CodeQL covers JavaScript/TypeScript and Python here — the two languages whose
 extractors work without a build step, which is the constraint for a runner that
@@ -159,15 +293,37 @@ docs/DESIGN-SYSTEM.md        design tokens and the measurements behind them
   so a replayed or stray callback can't overwrite another scan's verdict.
 - Findings are scoped per-user by RLS on every table.
 
+- GitHub tokens are encrypted at rest with AES-256-GCM under
+  `TOKEN_ENCRYPTION_KEY`; the column name finally means what it says. Rows
+  written before this existed are plaintext and are re-encrypted in place the
+  first time they're read.
+- Tokens are never interpolated into clone URLs. They reach `git` through an
+  environment variable and a credential helper, so they stay out of process
+  arguments and out of the clone's `.git/config` — which is mounted into the
+  analysis runner alongside untrusted repository code.
+
 **Known gaps**, kept here rather than in a comment nobody reads:
 
-- GitHub tokens are stored in a column named `access_token_encrypted` but are
-  **not** encrypted at rest. Either wire up Supabase Vault/`pgsodium` or rename
-  the column so it stops implying a guarantee it doesn't provide.
 - `sandbox/docker-compose.yml` ships a `caddy` service for TLS, but you must
   point real DNS at the host before it can issue a certificate.
-- API keys can be created in Settings but nothing consumes them yet — there is
-  no endpoint that authenticates with a `pta_` key.
+- AI-generated fixes are re-scanned before the PR opens, but not compiled,
+  run or tested, and the re-scan is AI-driven so it can vary between runs. A
+  reviewer still has to read and test the patch.
+- Test coverage is targeted, not broad: it covers token encryption, the
+  callback binding rules, and the scan pipeline's pure functions. The React
+  components and the GitHub/OpenRouter integration paths are untested.
+- A scan job that dies mid-run (worker restart) leaves its scan row in
+  `running` with nothing to move it on. Nothing retries dropped jobs — that is
+  also why the sandbox's Redis deliberately does not persist to disk.
+- Email is sent directly from the app via nodemailer/SMTP, which needs a real
+  TCP socket — this works today because the app runs as a persistent Node
+  process, but it will not work as-is if this is ever deployed to genuine
+  Cloudflare Workers (no raw sockets). The fix, if that happens, is contained
+  to `src/lib/email.server.ts`.
+- Weekly scanning has no per-repo day/hour/timezone control, only a rolling
+  "every N hours since it was last scanned" — `repositories.schedule_day` /
+  `schedule_hour` / `timezone` exist in the schema for finer control later but
+  aren't wired up.
 
 ## License
 

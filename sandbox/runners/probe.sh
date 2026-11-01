@@ -19,6 +19,23 @@ if [[ -z "$JOB" ]]; then
 fi
 
 PROBE=$(echo "$JOB" | jq -r '.probe')
+
+# ---------------------------------------------------------------------------
+# progress: one line for the live sandbox console. Goes to stderr behind a
+# marker the worker looks for; the worker redacts and relays it. Only these
+# lines are relayed, never raw tool output, so analysis of untrusted code can't
+# inject text into the UI. Must never fail the probe, hence the early returns.
+#
+# Only jq's own errors are silenced. An earlier version wrapped the whole
+# pipeline in `{ …; } 2>/dev/null`, which made the `>&2` inside it point at
+# /dev/null too — every progress line was silently discarded.
+# ---------------------------------------------------------------------------
+progress() {
+  local stage="$1" message="$2" level="${3:-info}" line
+  line=$(jq -nc --arg s "$stage" --arg m "$message" --arg l "$level" \
+    '{stage:$s, message:$m, level:$l, data:{}}' 2>/dev/null) || return 0
+  printf '@@progress %s\n' "$line" >&2 || true
+}
 RULES_DIR="/opt/semgrep-rules"
 CODEQL_BIN="${CODEQL_HOME:-/opt/codeql}/codeql"
 REPO_PATH="${REPO_PATH:-/work/repo}"
@@ -32,6 +49,8 @@ if [[ ! -d .git ]]; then
 fi
 
 RESULT='{"status":"not_exploitable","evidence":"no issues found by static analysis"}'
+
+progress "probe" "Probe: ${PROBE} · repository mounted read-only · no network"
 
 # ---------------------------------------------------------------------------
 # run_semgrep: scan CWD with bundled offline rules (or auto if rules missing).
@@ -55,10 +74,13 @@ run_semgrep() {
     config_args=("--config" "auto")
   fi
 
-  local OUT COUNT SEMGREP_STATUS
+  local OUT COUNT SEMGREP_STATUS started
+  progress "semgrep" "Running Semgrep with $(( ${#config_args[@]} / 2 )) offline rule pack(s)…"
+  started=$SECONDS
   OUT=$(semgrep --quiet --json "${config_args[@]}" . 2>/tmp/semgrep.err) && SEMGREP_STATUS=0 || SEMGREP_STATUS=$?
 
   if [[ "$SEMGREP_STATUS" -ne 0 ]]; then
+    progress "semgrep" "Semgrep crashed (exit ${SEMGREP_STATUS})" "error"
     RESULT=$(jq -nc --rawfile err /tmp/semgrep.err \
       '{status:"failed", evidence: ("semgrep crashed: " + ($err | .[-2000:]))}')
     return
@@ -67,6 +89,7 @@ run_semgrep() {
   COUNT=$(echo "$OUT" | jq '.results | length' 2>/dev/null || echo 0)
 
   if [[ "$COUNT" -gt 0 ]]; then
+    progress "semgrep" "Semgrep matched ${COUNT} finding(s) in $(( SECONDS - started ))s" "warn"
     RESULT=$(jq -nc \
       --argjson count "$COUNT" \
       --argjson results "$(echo "$OUT" | jq '[.results[:5]]' | jq '.[0]')" \
@@ -76,6 +99,7 @@ run_semgrep() {
   else
     local file_count
     file_count=$(find . -type f | wc -l)
+    progress "semgrep" "Semgrep: no rule matched across ${file_count} files ($(( SECONDS - started ))s)" "success"
     RESULT=$(jq -nc \
       --arg files "$file_count" \
       '{status:"not_exploitable",
@@ -110,10 +134,11 @@ detect_codeql_language() {
 # the job silently unanswered.
 # ---------------------------------------------------------------------------
 run_codeql() {
-  local lang db_dir sarif_out target_file
+  local lang db_dir sarif_out target_file started results
   lang=$(detect_codeql_language)
 
   if [[ -z "$lang" ]]; then
+    progress "detect" "No language CodeQL can analyse without a build here; using Semgrep"
     echo "codeql: no supported language detected, using semgrep" >&2
     run_semgrep
     return
@@ -124,10 +149,13 @@ run_codeql() {
     return
   fi
 
+  progress "detect" "Detected ${lang}: using CodeQL taint analysis (no build step needed)"
   db_dir="/tmp/codeqldb-$$"
   sarif_out="/tmp/codeql-results-$$.sarif"
   rm -rf "$db_dir" 2>/dev/null || true
 
+  progress "codeql" "Building the CodeQL database for ${lang}…"
+  started=$SECONDS
   if ! "$CODEQL_BIN" database create "$db_dir" \
         --language="$lang" \
         --source-root=. \
@@ -136,11 +164,14 @@ run_codeql() {
         --overwrite \
         > /tmp/codeql-create.log 2>&1; then
     echo "codeql: database create failed for language=$lang, falling back to semgrep" >&2
+    progress "codeql" "CodeQL database build failed; falling back to Semgrep" "warn"
     tail -c 2000 /tmp/codeql-create.log >&2 || true
     run_semgrep
     return
   fi
 
+  progress "codeql" "Database built in $(( SECONDS - started ))s. Running ${lang}-security-extended queries…"
+  started=$SECONDS
   if ! "$CODEQL_BIN" database analyze "$db_dir" \
         "${lang}-security-extended.qls" \
         --format=sarifv2.1.0 \
@@ -149,12 +180,15 @@ run_codeql() {
         --ram=1500 \
         > /tmp/codeql-analyze.log 2>&1; then
     echo "codeql: analyze failed for language=$lang, falling back to semgrep" >&2
+    progress "codeql" "CodeQL analysis failed; falling back to Semgrep" "warn"
     tail -c 2000 /tmp/codeql-analyze.log >&2 || true
     rm -rf "$db_dir" 2>/dev/null || true
     run_semgrep
     return
   fi
 
+  results=$(jq '[.runs[].results[]] | length' "$sarif_out" 2>/dev/null || echo "?")
+  progress "codeql" "Analysis finished in $(( SECONDS - started ))s: ${results} result(s). Matching them to the ${PROBE} probe's CWEs…"
   target_file=$(echo "$JOB" | jq -r '.file_path // ""')
   RESULT=$(python3 /opt/sarif_verdict.py "$sarif_out" "$PROBE" "$target_file" 2>/tmp/sarif-verdict.err) \
     || RESULT=$(jq -nc --rawfile err /tmp/sarif-verdict.err \
@@ -171,6 +205,7 @@ case "$PROBE" in
     # job.file_path is a top-level field, not job.target.file_path.
     FILE=$(echo "$JOB" | jq -r '.file_path // ""')
     if [[ -n "$FILE" && -f "$FILE" ]]; then
+      progress "secret" "Scanning ${FILE} with trufflehog…"
       MATCHES=$(trufflehog3 --no-history --format json "$FILE" 2>/dev/null || echo "[]")
       # trufflehog3 may output null or an empty array on no findings
       if [[ "$MATCHES" != "[]" && "$MATCHES" != "null" && -n "$MATCHES" ]]; then

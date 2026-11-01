@@ -19,7 +19,9 @@ export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
 });
 
-function downloadJson(payload: any, name: string) {
+type ReportPayload = Awaited<ReturnType<typeof getReportPayload>>;
+
+function downloadJson(payload: ReportPayload, name: string) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -33,10 +35,10 @@ function esc(s: unknown) {
   return String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
 }
 
-function printPdf(payload: any) {
+function printPdf(payload: ReportPayload) {
   const rows = (payload.findings ?? [])
     .map(
-      (f: any) => `
+      (f) => `
       <div class="finding ${esc(f.severity)}">
         <div class="head"><span class="sev">${esc(f.severity)}</span> <strong>${esc(f.title)}</strong></div>
         <div class="meta">${esc(f.cwe_id ?? "")} ${f.cvss_score ? `· CVSS ${esc(f.cvss_score)}` : ""} ${
@@ -45,7 +47,7 @@ function printPdf(payload: any) {
         <p>${esc(f.description)}</p>
         ${
           Array.isArray(f.remediation_steps) && f.remediation_steps.length
-            ? `<ol>${f.remediation_steps.map((s: any) => `<li>${esc(s)}</li>`).join("")}</ol>`
+            ? `<ol>${f.remediation_steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
             : ""
         }
       </div>`,
@@ -115,8 +117,8 @@ function ReportsPage() {
     queryFn: () => scansFn(),
   });
 
-  const reportedScanIds = new Set(reports.map((r: any) => r.scan_id));
-  const pending = completedScans.filter((s: any) => !reportedScanIds.has(s.id));
+  const reportedScanIds = new Set(reports.map((r) => r.scan_id));
+  const pending = completedScans.filter((s) => !reportedScanIds.has(s.id));
 
   const generate = useMutation({
     mutationFn: (scanId: string) => genFn({ data: { scanId } }),
@@ -148,7 +150,7 @@ function ReportsPage() {
         <section className="rounded-lg border border-border bg-card p-4">
           <h2 className="font-semibold mb-3 text-sm">Scans without a report</h2>
           <div className="divide-y divide-border">
-            {pending.map((s: any) => (
+            {pending.map((s) => (
               <div key={s.id} className="py-2 flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">
@@ -193,7 +195,7 @@ function ReportsPage() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {reports.map((r: any) => (
+            {reports.map((r) => (
               <div key={r.id} className="p-4 flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="font-medium truncate">

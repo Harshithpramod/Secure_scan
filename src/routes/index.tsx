@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import ColorBends from "@/components/backgrounds/ColorBends";
+import DotField from "@/components/backgrounds/DotField";
 import {
   Shield,
   FileCode,
@@ -202,9 +204,17 @@ function Stagger({
   );
 }
 
+/**
+ * Every staggered item — stat tiles, feature cards, CWE chips, the four steps,
+ * the trust row — enters with a small scale as well as the rise. 0.965 is
+ * deliberately shallow: enough that a number or a chip lands rather than just
+ * slides, but short of the bouncy "card deal" that would read as decoration on
+ * what is meant to be scan data. One variant, so the whole page pops
+ * consistently instead of each section inventing its own entrance.
+ */
 const staggerItem = {
-  hidden: { opacity: 0, y: 22 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.62, ease: EASE } },
+  hidden: { opacity: 0, y: 22, scale: 0.965 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.62, ease: EASE } },
 };
 
 /** A single cascading child. Must sit inside <Stagger>. */
@@ -319,6 +329,27 @@ function ScrollProgress() {
       style={{ scaleX }}
       className="fixed inset-x-0 top-0 z-50 h-0.5 origin-left bg-gradient-to-r from-landing-primary via-landing-accent to-low"
     />
+  );
+}
+
+/**
+ * The light that pools at the bottom edge of a landing section: a soft purple
+ * pool plus the bright hairline seam where it meets the next band, so sections
+ * end on spilled colour rather than a flat cut.
+ *
+ * Purely decorative and static — no animation, so there is nothing to skip
+ * under prefers-reduced-motion. The parent section needs `relative` (and
+ * `overflow-hidden`, or the pool bleeds past the divider).
+ */
+function SectionGlow() {
+  return (
+    <>
+      <div
+        aria-hidden
+        className="section-glow pointer-events-none absolute inset-x-0 bottom-0 h-36 md:h-44"
+      />
+      <div aria-hidden className="glow-seam pointer-events-none absolute inset-x-0 bottom-0 h-px" />
+    </>
   );
 }
 
@@ -579,8 +610,13 @@ function Landing() {
   const copyY = useTransform(heroP, [0, 1], [0, 90]);
   const copyFade = useTransform(heroP, [0, 0.75], [1, 0]);
   const consoleY = useTransform(heroP, [0, 1], [0, 150]);
-  const gridY = useTransform(heroP, [0, 1], [0, 60]);
-  const glowY = useTransform(heroP, [0, 1], [0, -40]);
+
+  // The finding report drifts against its copy for the whole time the section
+  // is on screen — the same depth trick as the hero, applied to the one panel
+  // below the fold that is actually carrying scan data. useParallax has existed
+  // since the page was built but had no caller until now.
+  const reportRef = useRef<HTMLDivElement>(null);
+  const reportY = useParallax(reportRef, 18);
 
   // The step connector draws itself as the section scrolls into place.
   const stepsRef = useRef<HTMLDivElement>(null);
@@ -633,7 +669,7 @@ function Landing() {
 
           <div className="flex items-center gap-2">
             <Link
-              to="/dashboard"
+              to="/demo"
               className="focus-ring hidden min-h-11 cursor-pointer items-center rounded-md border border-landing-border px-4 text-sm font-medium whitespace-nowrap text-landing-fg transition-colors duration-200 hover:border-landing-border-strong hover:bg-landing-surface lg:inline-flex"
             >
               Live demo
@@ -653,23 +689,81 @@ function Landing() {
       <main id="main">
         {/* Hero */}
         <section ref={heroRef} className="relative overflow-hidden border-b border-landing-border">
-          <motion.div
-            aria-hidden
-            style={reduce ? undefined : { y: gridY }}
-            className="grid-bg absolute inset-0 opacity-70"
-          />
-          {/* The bloom sits low in the section and drifts slightly slower than
-              the content, so it behaves like a light source behind the page
-              rather than a texture stuck to it. */}
-          <motion.div
-            aria-hidden
-            style={reduce ? undefined : { y: glowY }}
-            className="landing-glow pointer-events-none absolute inset-0"
-          />
-          <div
-            aria-hidden
-            className="glow-seam pointer-events-none absolute inset-x-0 bottom-0 h-px"
-          />
+          {/* ColorBends replaces the former .grid-bg / .landing-glow pair. It is
+              WebGL, so it is skipped entirely under prefers-reduced-motion —
+              falling back to the original static glow rather than an animation
+              the user asked not to see.
+
+              The wrapper's geometry is copied from reactbits.dev's own hero
+              (.ln-hero-band): 150% of the section height, pulled up by 50%, so
+              the shader's bright core sits below the fold and the top of the
+              hero gets its darker falloff. They use no mask — the look comes
+              entirely from that offset. */}
+          {reduce ? (
+            <div aria-hidden className="landing-glow pointer-events-none absolute inset-0" />
+          ) : (
+            <>
+              {/* Layer order is copied from reactbits.dev's own hero: the dots
+                  paint FIRST and the colour band paints over them (they lift
+                  .ln-hero-band to z-index 1 above an unlayered dot canvas).
+                  That is what keeps their dots subtle — the purple wash covers
+                  the grid where it is brightest, and the dots only read in the
+                  darker falloff. Plain DOM order does the same job here without
+                  z-indexes, which would otherwise have to be fought off the
+                  hero content below.
+
+                  It takes the hero's own box (inset-0) rather than the bends'
+                  offset 150% band, so the grid stays square and evenly spaced.
+
+                  pointer-events-none is safe: DotField tracks the cursor with a
+                  window-level mousemove listener and maps it through its
+                  parent's rect, so it still reacts without intercepting clicks
+                  meant for the hero's buttons. */}
+              <div aria-hidden className="pointer-events-none absolute inset-0 opacity-70">
+                <DotField
+                  dotRadius={1.5}
+                  dotSpacing={14}
+                  cursorRadius={500}
+                  cursorForce={0.1}
+                  bulgeOnly={true}
+                  bulgeStrength={67}
+                  glowRadius={160}
+                  sparkle={false}
+                  waveAmplitude={0}
+                />
+              </div>
+
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0"
+                style={{
+                  top: "-50%",
+                  height: "150%",
+                  // Stands in for the fadeTop prop that reactbits.dev's newer
+                  // build has and the published component does not: fades the
+                  // canvas out toward the top so the masthead stays dark and the
+                  // colour gathers lower in the section. Upstream runs the
+                  // canvas unmasked at full opacity; this keeps the mask (our
+                  // masthead sits directly on the hero, theirs does not) but
+                  // starts it later so more of the colour survives.
+                  maskImage: "linear-gradient(to bottom, transparent 28%, black 56%)",
+                  WebkitMaskImage: "linear-gradient(to bottom, transparent 28%, black 56%)",
+                }}
+              >
+                <ColorBends
+                  colors={["#A855F7"]}
+                  speed={0.2}
+                  frequency={1.0}
+                  noise={0.15}
+                  rotation={90}
+                  iterations={1}
+                  intensity={1.3}
+                  bandWidth={1.2}
+                />
+              </div>
+            </>
+          )}
+          <SectionGlow />
 
           <div className="relative mx-auto grid max-w-[1200px] items-center gap-14 px-6 py-20 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-32">
             <motion.div style={reduce ? undefined : { y: copyY, opacity: copyFade }}>
@@ -704,7 +798,7 @@ function Landing() {
                   Start Scanning
                 </Link>
                 <Link
-                  to="/dashboard"
+                  to="/demo"
                   className="focus-ring group inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-landing-border bg-landing-surface px-6 py-3.5 font-medium text-landing-fg transition-colors duration-200 hover:border-landing-border-strong hover:bg-landing-surface-2"
                 >
                   View Live Demo
@@ -744,7 +838,11 @@ function Landing() {
         </section>
 
         {/* Stats */}
-        <section aria-label="Product metrics" className="border-b border-landing-border">
+        <section
+          aria-label="Product metrics"
+          className="relative overflow-hidden border-b border-landing-border"
+        >
+          <SectionGlow />
           {/* Padding lives on the wrapper, not the grid: a padded grid with
               gap-px + a background paints the gutters in border colour and
               leaves visible slabs down both edges. */}
@@ -773,7 +871,8 @@ function Landing() {
         </section>
 
         {/* Product surface */}
-        <section className="border-b border-landing-border">
+        <section className="relative overflow-hidden border-b border-landing-border">
+          <SectionGlow />
           <div className="mx-auto grid max-w-[1200px] items-center gap-12 px-6 py-20 md:py-28 lg:grid-cols-[1fr_1.1fr] lg:gap-16">
             <div>
               <SectionHeading
@@ -797,14 +896,27 @@ function Landing() {
               </Stagger>
             </div>
 
-            <Reveal delay={0.1} y={26}>
-              <FindingCard />
-            </Reveal>
+            {/* Tied to scroll position rather than fired once: the report
+                drifts slowly against the copy beside it for the whole time the
+                section is on screen, so the panel keeps reacting to the scroll
+                instead of going inert the moment it has entered. Distance is
+                small (18px over the full pass) — enough to give the column
+                depth, not enough to break its alignment with the text. */}
+            <motion.div
+              ref={reportRef}
+              style={reduce ? undefined : { y: reportY }}
+              className="will-change-transform"
+            >
+              <Reveal delay={0.1} y={26}>
+                <FindingCard />
+              </Reveal>
+            </motion.div>
           </div>
         </section>
 
         {/* Features */}
-        <section id="features" className="border-b border-landing-border">
+        <section id="features" className="relative overflow-hidden border-b border-landing-border">
+          <SectionGlow />
           <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
             <SectionHeading
               eyebrow="Capabilities"
@@ -840,7 +952,8 @@ function Landing() {
         </section>
 
         {/* How it works */}
-        <section id="how" className="border-b border-landing-border">
+        <section id="how" className="relative overflow-hidden border-b border-landing-border">
+          <SectionGlow />
           <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
             <SectionHeading
               eyebrow="Process"
@@ -881,7 +994,8 @@ function Landing() {
         </section>
 
         {/* Coverage */}
-        <section id="coverage" className="border-b border-landing-border">
+        <section id="coverage" className="relative overflow-hidden border-b border-landing-border">
+          <SectionGlow />
           <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
             <SectionHeading
               eyebrow="Coverage"
@@ -914,17 +1028,48 @@ function Landing() {
           </div>
         </section>
 
-        {/* CTA */}
-        <section className="border-b border-landing-border">
+        {/* CTA + the guarantees that back it. One section, not two: the trust
+            row is the fine print on this specific ask, so putting a divider and
+            a second glow between them read as a new topic starting rather than
+            the same one finishing. */}
+        <section className="relative overflow-hidden border-b border-landing-border">
+          <SectionGlow />
           <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
             <Reveal y={26}>
               <div className="relative overflow-hidden rounded-2xl border border-landing-border bg-landing-surface px-6 py-16 text-center sm:px-12">
-                <div aria-hidden className="landing-glow pointer-events-none absolute inset-0" />
+                {/* Dots first, then the purple over them — the same order the
+                    hero uses, and the reason the grid stays a texture inside
+                    the light instead of sitting on top of it. DotField is
+                    skipped under prefers-reduced-motion; the glow is static CSS
+                    so it stays either way and the panel never falls back to a
+                    flat surface. */}
+                {!reduce && (
+                  <div aria-hidden className="pointer-events-none absolute inset-0">
+                    <DotField
+                      dotRadius={1.5}
+                      dotSpacing={14}
+                      cursorRadius={500}
+                      cursorForce={0.1}
+                      bulgeOnly={true}
+                      bulgeStrength={67}
+                      glowRadius={160}
+                      sparkle={false}
+                      waveAmplitude={0}
+                    />
+                  </div>
+                )}
+                <div aria-hidden className="cta-glow pointer-events-none absolute inset-0" />
                 <div className="relative mx-auto max-w-2xl">
                   <h2 className="font-display text-3xl leading-[1.15] font-semibold tracking-[-0.02em] text-balance text-landing-fg md:text-[2.5rem]">
                     Find the exploit before someone else does.
                   </h2>
-                  <p className="mt-4 text-base leading-relaxed text-landing-fg-secondary">
+                  {/* Brighter than the muted body colour used elsewhere: this
+                      line is the one piece of small text sitting on the lit
+                      part of the panel. Muted foreground measures ~5.3:1 there
+                      — over AA, but only just, and .landing-glow's note records
+                      this same line dropping to 3.1:1 the last time the core
+                      was raised. White/90 puts it at ~10:1 with room to spare. */}
+                  <p className="mt-4 text-base leading-relaxed text-white/90">
                     Connect a repository and get your first sandbox-verified report in under a
                     minute.
                   </p>
@@ -938,22 +1083,25 @@ function Landing() {
                 </div>
               </div>
             </Reveal>
-          </div>
-        </section>
 
-        {/* Trust */}
-        <section aria-label="Security guarantees" className="border-b border-landing-border">
-          <Stagger
-            gap={0.08}
-            className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-center gap-x-8 gap-y-3 px-6 py-10 text-sm text-landing-fg-muted"
-          >
-            {trust.map((item) => (
-              <StaggerItem key={item} className="flex items-center gap-2">
-                <CheckCircle2 aria-hidden className="h-4 w-4 text-low" />
-                {item}
-              </StaggerItem>
-            ))}
-          </Stagger>
+            {/* A real list with a heading, rather than the aria-label the
+                standalone <section> used to carry: once it stops being its own
+                landmark it needs its own accessible name from somewhere. */}
+            <h2 className="sr-only">Security guarantees</h2>
+            <Stagger
+              as="ul"
+              gap={0.08}
+              delay={0.12}
+              className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-landing-fg-muted"
+            >
+              {trust.map((item) => (
+                <StaggerItem as="li" key={item} className="flex items-center gap-2">
+                  <CheckCircle2 aria-hidden className="h-4 w-4 text-low" />
+                  {item}
+                </StaggerItem>
+              ))}
+            </Stagger>
+          </div>
         </section>
       </main>
 

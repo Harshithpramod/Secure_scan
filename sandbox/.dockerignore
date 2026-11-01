@@ -1,0 +1,10 @@
+# Applies only to builds whose context is sandbox/ itself (currently the fixer).
+# Keeps secrets and bulk out of the build context sent to the Docker daemon —
+# nothing here is COPYed, but .env should never leave this directory at all.
+.env
+.env.*
+!.env.example
+**/node_modules
+**/*.test.js
+runners/
+caddy/

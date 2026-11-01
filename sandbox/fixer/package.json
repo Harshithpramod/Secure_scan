@@ -1,0 +1,7 @@
+{
+  "name": "pentestai-sandbox-fixer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "One-shot container that generates a remediation pull request for a single vulnerability. Uses only Node 20 built-ins (global fetch) — no dependencies by design, so there is nothing to audit or update in an image that holds a write-scoped GitHub token."
+}

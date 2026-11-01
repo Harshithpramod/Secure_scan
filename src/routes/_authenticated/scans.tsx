@@ -26,6 +26,13 @@ function ScansPage() {
       if (error) throw error;
       return data;
     },
+    // Scans run in the sandbox now, so the row changes without this tab doing
+    // anything. Poll only while something is actually in flight.
+    refetchInterval: (q) => {
+      const items = (q.state.data as any[]) ?? [];
+      const inFlight = items.some((s) => s.status === "queued" || s.status === "running");
+      return inFlight ? 3000 : false;
+    },
   });
 
   return (
@@ -40,7 +47,7 @@ function ScansPage() {
         />
       ) : (
         <div className="divide-y divide-border">
-          {scans.map((s: any) => (
+          {scans.map((s) => (
             <Link
               key={s.id}
               to="/scans/$scanId"
@@ -59,7 +66,7 @@ function ScansPage() {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                {s.status === "running" && (
+                {(s.status === "running" || s.status === "queued") && (
                   <div className="w-40 h-2 rounded-full bg-muted overflow-hidden hidden md:block">
                     <div
                       className="h-full bg-primary transition-all"

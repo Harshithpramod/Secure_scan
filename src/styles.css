@@ -268,6 +268,50 @@
     );
 }
 
+/* The CTA card's own light source. Same three-ellipse construction as
+   .landing-glow but pushed brighter and taller, because here it is the whole
+   point of the panel rather than a wash behind a hero.
+
+   The cores still sit below the copy (50% 100%+) for the contrast reason
+   documented on .landing-glow: the CTA's body line is muted foreground, and
+   lifting the bright core level with it is what pushes that text under AA. */
+@utility cta-glow {
+  background:
+    radial-gradient(
+      52rem 20rem at 50% 116%,
+      color-mix(in oklab, var(--color-landing-accent) 66%, transparent),
+      transparent 64%
+    ),
+    radial-gradient(
+      72rem 32rem at 50% 108%,
+      color-mix(in oklab, var(--color-landing-primary) 62%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      96rem 44rem at 50% 100%,
+      color-mix(in oklab, var(--color-landing-primary) 30%, transparent),
+      transparent 78%
+    );
+}
+
+/* The light that pools at the bottom edge of every landing section, so each
+   band ends on the same spill of colour instead of a flat cut. Deliberately
+   much weaker than .landing-glow — this repeats eight times down the page, and
+   at hero strength it would read as stripes rather than as lighting. */
+@utility section-glow {
+  background:
+    radial-gradient(
+      40rem 9rem at 50% 100%,
+      color-mix(in oklab, var(--color-landing-accent) 26%, transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      64rem 15rem at 50% 100%,
+      color-mix(in oklab, var(--color-landing-primary) 22%, transparent),
+      transparent 74%
+    );
+}
+
 /* Bright seam where the lit section meets the next one — the glow reads as
    light spilling over the boundary rather than stopping at a hard edge. */
 @utility glow-seam {

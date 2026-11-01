@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleSandboxCallback } from "./lib/sandbox-callback.server";
+import { handleWeeklySweepRequest } from "./lib/weekly-scan-sweep.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -51,6 +52,9 @@ export default {
       const url = new URL(request.url);
       if (url.pathname === "/api/public/sandbox-callback" && request.method === "POST") {
         return await handleSandboxCallback(request);
+      }
+      if (url.pathname === "/api/public/run-weekly-scans" && request.method === "POST") {
+        return await handleWeeklySweepRequest(request);
       }
 
       const handler = await getServerEntry();

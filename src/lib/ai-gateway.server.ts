@@ -1,10 +1,11 @@
-// Lovable AI Gateway helper (server-only).
-// Do not import from the browser.
+// AI helper (server-only). Do not import from the browser.
+// Gemini's OpenAI-compatible endpoint, so the request/response shape stays
+// portable to any other OpenAI-style provider.
 
-const LOVABLE_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-// Gemini OpenAI-compatible endpoint — used when LOVABLE_API_KEY is absent (local dev).
 const GEMINI_GATEWAY_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -20,23 +21,15 @@ export async function callAI<T = unknown>(opts: {
   };
   temperature?: number;
 }): Promise<T | string> {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!lovableKey && !geminiKey) {
-    throw new Error("No AI key configured — set LOVABLE_API_KEY or GEMINI_API_KEY.");
+  if (!apiKey) {
+    throw new Error("No AI key configured — set GEMINI_API_KEY.");
   }
 
-  const usingLovable = Boolean(lovableKey);
-  const url = usingLovable ? LOVABLE_GATEWAY_URL : GEMINI_GATEWAY_URL;
-  // Lovable gateway uses OpenRouter-style provider/model names; Gemini API uses bare model ids.
-  const model = opts.model
-    ? usingLovable
-      ? opts.model
-      : opts.model.replace(/^google\//, "")
-    : usingLovable
-      ? "google/gemini-2.5-flash"
-      : "gemini-2.5-flash";
+  // Callers may still pass OpenRouter-style "google/gemini-…" ids; the Gemini
+  // API wants the bare model name.
+  const model = (opts.model ?? DEFAULT_MODEL).replace(/^google\//, "");
 
   const body: Record<string, unknown> = {
     model,
@@ -55,20 +48,18 @@ export async function callAI<T = unknown>(opts: {
     };
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (usingLovable) {
-    headers["Lovable-API-Key"] = lovableKey!;
-  } else {
-    headers["Authorization"] = `Bearer ${geminiKey}`;
-  }
-
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  const res = await fetch(GEMINI_GATEWAY_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
 
   if (!res.ok) {
     const txt = await res.text();
     if (res.status === 429) throw new Error("AI rate limit exceeded — please retry shortly.");
-    if (res.status === 402)
-      throw new Error("Lovable AI credits exhausted — add credits in workspace billing.");
     throw new Error(`AI gateway error ${res.status}: ${txt.slice(0, 300)}`);
   }
 

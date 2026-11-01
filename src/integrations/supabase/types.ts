@@ -8,39 +8,6 @@ export type Database = {
   };
   public: {
     Tables: {
-      api_keys: {
-        Row: {
-          created_at: string;
-          id: string;
-          key_hash: string;
-          key_prefix: string;
-          last_used_at: string | null;
-          name: string;
-          revoked_at: string | null;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          id?: string;
-          key_hash: string;
-          key_prefix: string;
-          last_used_at?: string | null;
-          name: string;
-          revoked_at?: string | null;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          id?: string;
-          key_hash?: string;
-          key_prefix?: string;
-          last_used_at?: string | null;
-          name?: string;
-          revoked_at?: string | null;
-          user_id?: string;
-        };
-        Relationships: [];
-      };
       github_connections: {
         Row: {
           access_token_encrypted: string;
@@ -117,6 +84,8 @@ export type Database = {
           github_username: string | null;
           id: string;
           job_title: string | null;
+          onboarding_completed: boolean;
+          onboarding_completed_at: string | null;
           org_id: string | null;
           updated_at: string;
         };
@@ -129,6 +98,8 @@ export type Database = {
           github_username?: string | null;
           id: string;
           job_title?: string | null;
+          onboarding_completed?: boolean;
+          onboarding_completed_at?: string | null;
           org_id?: string | null;
           updated_at?: string;
         };
@@ -141,6 +112,8 @@ export type Database = {
           github_username?: string | null;
           id?: string;
           job_title?: string | null;
+          onboarding_completed?: boolean;
+          onboarding_completed_at?: string | null;
           org_id?: string | null;
           updated_at?: string;
         };
@@ -328,12 +301,14 @@ export type Database = {
           profile: Database["public"]["Enums"]["scan_depth"];
           progress: number;
           repository_id: string;
+          sandbox_job_id: string | null;
           security_score: number | null;
           started_at: string | null;
           status: Database["public"]["Enums"]["scan_status"];
           trigger: Database["public"]["Enums"]["scan_trigger"];
           updated_at: string;
           user_id: string;
+          weekly_run_id: string | null;
         };
         Insert: {
           branch?: string | null;
@@ -352,12 +327,14 @@ export type Database = {
           profile?: Database["public"]["Enums"]["scan_depth"];
           progress?: number;
           repository_id: string;
+          sandbox_job_id?: string | null;
           security_score?: number | null;
           started_at?: string | null;
           status?: Database["public"]["Enums"]["scan_status"];
           trigger?: Database["public"]["Enums"]["scan_trigger"];
           updated_at?: string;
           user_id: string;
+          weekly_run_id?: string | null;
         };
         Update: {
           branch?: string | null;
@@ -376,12 +353,14 @@ export type Database = {
           profile?: Database["public"]["Enums"]["scan_depth"];
           progress?: number;
           repository_id?: string;
+          sandbox_job_id?: string | null;
           security_score?: number | null;
           started_at?: string | null;
           status?: Database["public"]["Enums"]["scan_status"];
           trigger?: Database["public"]["Enums"]["scan_trigger"];
           updated_at?: string;
           user_id?: string;
+          weekly_run_id?: string | null;
         };
         Relationships: [
           {
@@ -392,6 +371,102 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      vulnerability_events: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          kind: string;
+          message: string | null;
+          repository_id: string | null;
+          scan_id: string | null;
+          user_id: string;
+          vulnerability_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          kind: string;
+          message?: string | null;
+          repository_id?: string | null;
+          scan_id?: string | null;
+          user_id: string;
+          vulnerability_id: string;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          kind?: string;
+          message?: string | null;
+          repository_id?: string | null;
+          scan_id?: string | null;
+          user_id?: string;
+          vulnerability_id?: string;
+        };
+        Relationships: [];
+      };
+      job_logs: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          job_id: string;
+          job_kind: string;
+          level: string;
+          message: string;
+          seq: number;
+          stage: string | null;
+          user_id: string;
+          vulnerability_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          job_id: string;
+          job_kind: string;
+          level?: string;
+          message: string;
+          seq: number;
+          stage?: string | null;
+          user_id: string;
+          vulnerability_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          job_id?: string;
+          job_kind?: string;
+          level?: string;
+          message?: string;
+          seq?: number;
+          stage?: string | null;
+          user_id?: string;
+          vulnerability_id?: string | null;
+        };
+        Relationships: [];
+      };
+      weekly_digest_log: {
+        Row: {
+          sent_at: string;
+          user_id: string;
+          weekly_run_id: string;
+        };
+        Insert: {
+          sent_at?: string;
+          user_id: string;
+          weekly_run_id: string;
+        };
+        Update: {
+          sent_at?: string;
+          user_id?: string;
+          weekly_run_id?: string;
+        };
+        Relationships: [];
       };
       user_roles: {
         Row: {
@@ -424,23 +499,40 @@ export type Database = {
           description: string | null;
           detected_at: string;
           detected_by_agents: string[];
+          duplicate_of: string | null;
           file_path: string | null;
+          fix_branch: string | null;
+          fix_completed_at: string | null;
+          fix_error: string | null;
+          fix_job_id: string | null;
+          fix_pr_number: number | null;
+          fix_pr_url: string | null;
+          fix_requested_at: string | null;
+          fix_status: Database["public"]["Enums"]["vuln_fix_status"];
           fixed_at: string | null;
           github_issue_url: string | null;
           id: string;
+          last_seen_at: string | null;
+          last_seen_scan_id: string | null;
           line_end: number | null;
           line_start: number | null;
+          missed_scans: number;
           owasp_category: string | null;
+          regression_count: number;
           remediation_steps: Json;
           repository_id: string;
           sandbox_job_id: string | null;
           scan_id: string | null;
           severity: Database["public"]["Enums"]["severity_level"];
           status: Database["public"]["Enums"]["vuln_status"];
+          status_reason: string | null;
           suggested_fix_diff: string | null;
           title: string;
           updated_at: string;
           user_id: string;
+          verification_completed_at: string | null;
+          verification_details: Json | null;
+          verification_duration_ms: number | null;
           verification_evidence: string | null;
           verification_status: Database["public"]["Enums"]["verification_status"];
         };
@@ -453,23 +545,40 @@ export type Database = {
           description?: string | null;
           detected_at?: string;
           detected_by_agents?: string[];
+          duplicate_of?: string | null;
           file_path?: string | null;
+          fix_branch?: string | null;
+          fix_completed_at?: string | null;
+          fix_error?: string | null;
+          fix_job_id?: string | null;
+          fix_pr_number?: number | null;
+          fix_pr_url?: string | null;
+          fix_requested_at?: string | null;
+          fix_status?: Database["public"]["Enums"]["vuln_fix_status"];
           fixed_at?: string | null;
           github_issue_url?: string | null;
           id?: string;
+          last_seen_at?: string | null;
+          last_seen_scan_id?: string | null;
           line_end?: number | null;
           line_start?: number | null;
+          missed_scans?: number;
           owasp_category?: string | null;
+          regression_count?: number;
           remediation_steps?: Json;
           repository_id: string;
           sandbox_job_id?: string | null;
           scan_id?: string | null;
           severity: Database["public"]["Enums"]["severity_level"];
           status?: Database["public"]["Enums"]["vuln_status"];
+          status_reason?: string | null;
           suggested_fix_diff?: string | null;
           title: string;
           updated_at?: string;
           user_id: string;
+          verification_completed_at?: string | null;
+          verification_details?: Json | null;
+          verification_duration_ms?: number | null;
           verification_evidence?: string | null;
           verification_status?: Database["public"]["Enums"]["verification_status"];
         };
@@ -482,23 +591,40 @@ export type Database = {
           description?: string | null;
           detected_at?: string;
           detected_by_agents?: string[];
+          duplicate_of?: string | null;
           file_path?: string | null;
+          fix_branch?: string | null;
+          fix_completed_at?: string | null;
+          fix_error?: string | null;
+          fix_job_id?: string | null;
+          fix_pr_number?: number | null;
+          fix_pr_url?: string | null;
+          fix_requested_at?: string | null;
+          fix_status?: Database["public"]["Enums"]["vuln_fix_status"];
           fixed_at?: string | null;
           github_issue_url?: string | null;
           id?: string;
+          last_seen_at?: string | null;
+          last_seen_scan_id?: string | null;
           line_end?: number | null;
           line_start?: number | null;
+          missed_scans?: number;
           owasp_category?: string | null;
+          regression_count?: number;
           remediation_steps?: Json;
           repository_id?: string;
           sandbox_job_id?: string | null;
           scan_id?: string | null;
           severity?: Database["public"]["Enums"]["severity_level"];
           status?: Database["public"]["Enums"]["vuln_status"];
+          status_reason?: string | null;
           suggested_fix_diff?: string | null;
           title?: string;
           updated_at?: string;
           user_id?: string;
+          verification_completed_at?: string | null;
+          verification_details?: Json | null;
+          verification_duration_ms?: number | null;
           verification_evidence?: string | null;
           verification_status?: Database["public"]["Enums"]["verification_status"];
         };
@@ -521,36 +647,7 @@ export type Database = {
       };
     };
     Views: {
-      api_keys_public: {
-        Row: {
-          created_at: string | null;
-          id: string | null;
-          key_prefix: string | null;
-          last_used_at: string | null;
-          name: string | null;
-          revoked_at: string | null;
-          user_id: string | null;
-        };
-        Insert: {
-          created_at?: string | null;
-          id?: string | null;
-          key_prefix?: string | null;
-          last_used_at?: string | null;
-          name?: string | null;
-          revoked_at?: string | null;
-          user_id?: string | null;
-        };
-        Update: {
-          created_at?: string | null;
-          id?: string | null;
-          key_prefix?: string | null;
-          last_used_at?: string | null;
-          name?: string | null;
-          revoked_at?: string | null;
-          user_id?: string | null;
-        };
-        Relationships: [];
-      };
+      [_ in never]: never;
     };
     Functions: {
       has_role: {
@@ -571,6 +668,7 @@ export type Database = {
       scan_trigger: "manual" | "scheduled" | "push";
       severity_level: "critical" | "high" | "medium" | "low";
       verification_status: "unverified" | "pending" | "confirmed" | "not_exploitable" | "failed";
+      vuln_fix_status: "none" | "pending" | "pr_created" | "failed";
       vuln_status: "open" | "in_progress" | "fixed" | "false_positive";
     };
     CompositeTypes: {
@@ -702,6 +800,7 @@ export const Constants = {
       scan_trigger: ["manual", "scheduled", "push"],
       severity_level: ["critical", "high", "medium", "low"],
       verification_status: ["unverified", "pending", "confirmed", "not_exploitable", "failed"],
+      vuln_fix_status: ["none", "pending", "pr_created", "failed"],
       vuln_status: ["open", "in_progress", "fixed", "false_positive"],
     },
   },

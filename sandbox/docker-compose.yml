@@ -51,6 +51,38 @@ services:
       RUNNER_TMPFS_SIZE: "2g"
       RUNNER_PIDS: "512"
       RUNNER_TIMEOUT_SECONDS: "1200"
+      # "Fix with AI" jobs. The fixer makes a handful of HTTPS calls and holds
+      # no repository on disk, so it needs a fraction of the runner's budget —
+      # but unlike the runner it needs egress, hence its own network.
+      FIXER_IMAGE: pentestai/fixer:latest
+      FIXER_NETWORK: pentestai-sandbox_fixer_net
+      FIXER_CPU: "1.0"
+      FIXER_MEMORY: "512m"
+      FIXER_PIDS: "128"
+      # Covers up to FIX_MAX_ATTEMPTS rounds of model rewrite + re-scan.
+      FIXER_TIMEOUT_SECONDS: "600"
+      # How many patches the fixer may try before giving up. Each one is
+      # re-scanned; a PR opens only for a patch whose re-scan no longer
+      # reports the finding. Clamped to 1-5 by the fixer.
+      FIX_MAX_ATTEMPTS: ${FIX_MAX_ATTEMPTS:-3}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      FIXER_MODEL: ${FIXER_MODEL}
+      APP_URL: ${APP_URL}
+      # Repository scans run here now rather than in the app's request path,
+      # so the worker needs the AI key. It still gets NO Supabase credentials —
+      # findings go back over the signed callback and the app writes them.
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      SCAN_MODEL: ${SCAN_MODEL}
+      # How often the worker pings the app to ask "is anything due for its
+      # weekly scan?" (see scheduler.js). The app itself decides what's
+      # actually due from repositories.last_scan_at — this just controls
+      # ping frequency, not the scan interval itself (that's
+      # WEEKLY_SWEEP_INTERVAL_HOURS in the APP's .env).
+      WEEKLY_SWEEP_CHECK_MINUTES: ${WEEKLY_SWEEP_CHECK_MINUTES:-60}
+      # The scheduler presents this back to the app to authenticate its
+      # "anything due?" request — the same token the app uses to submit jobs
+      # here, just travelling the other direction.
+      SANDBOX_API_TOKEN: ${SANDBOX_API_TOKEN}
       ARTIFACTS_DIR: /artifacts
       ARTIFACTS_VOLUME: pentestai_artifacts
       PENTESTAI_CALLBACK_URL: ${PENTESTAI_CALLBACK_URL}
@@ -62,6 +94,11 @@ services:
       - edge
       - internal
       - runner_net
+      # The worker doesn't need to talk over fixer_net, but Compose only
+      # creates networks that a service attaches to — without this the ad-hoc
+      # `docker run --network fixer_net` for each fix job fails with "network
+      # not found". Same reason runner_net is listed here.
+      - fixer_net
     depends_on:
       - redis
 
@@ -70,14 +107,20 @@ services:
     restart: unless-stopped
     command:
       - redis-server
+      # Appendonly is deliberately OFF. Queued jobs carry credentials — a
+      # read-scoped clone token for verify jobs, a WRITE-scoped one for fix
+      # jobs — and with the AOF enabled every one of those was written durably
+      # to disk, where a low-traffic sandbox could leave it for a long time
+      # before compaction. Nothing retries a dropped job today, so surviving a
+      # Redis restart is not worth persisting credentials for.
       - --appendonly
-      - "yes"
+      - "no"
+      - --save
+      - ""
       - --maxmemory
       - 256mb
       - --maxmemory-policy
       - allkeys-lru
-    volumes:
-      - redis_data:/data
     networks:
       - internal
 
@@ -94,8 +137,16 @@ networks:
     internal: true
     name: pentestai-sandbox_runner_net
 
+  # The fixer needs egress (GitHub + OpenRouter), so this one is NOT internal.
+  # It is still isolated from the rest of the stack: Docker's per-bridge
+  # iptables rules mean a container attached only to fixer_net cannot reach
+  # redis or api, by name or by IP. See "Verifying fixer_net isolation" in
+  # README.md for the smoke test that proves it.
+  fixer_net:
+    driver: bridge
+    name: pentestai-sandbox_fixer_net
+
 volumes:
-  redis_data:
   artifacts:
     name: pentestai_artifacts
   caddy_data:

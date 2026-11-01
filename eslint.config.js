@@ -36,5 +36,20 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  {
+    // Vendored verbatim from React Bits so it can be re-synced by diffing
+    // against upstream. Holding third-party source to our own lint rules would
+    // mean editing it on every sync, which defeats the point — any genuinely
+    // necessary change is marked "LOCAL PATCH" in the file itself.
+    files: ["src/components/backgrounds/**"],
+    // Upstream carries its own eslint-disable comments; with the rules above
+    // switched off those read as "unused", which is noise about someone else's
+    // code rather than a problem to fix.
+    linterOptions: { reportUnusedDisableDirectives: "off" },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "react-hooks/exhaustive-deps": "off",
+    },
+  },
   eslintPluginPrettier,
 );

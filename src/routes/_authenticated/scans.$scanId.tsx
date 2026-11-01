@@ -97,12 +97,14 @@ function ScanDetailPage() {
                   : "bg-primary/15 text-accent-fg"
             }`}
           >
-            {scan.status === "running" && <Loader2 className="h-3 w-3 inline mr-1 animate-spin" />}
+            {(scan.status === "running" || scan.status === "queued") && (
+              <Loader2 className="h-3 w-3 inline mr-1 animate-spin" />
+            )}
             {scan.status}
           </span>
         </div>
 
-        {scan.status === "running" && (
+        {(scan.status === "running" || scan.status === "queued") && (
           <div className="mt-4">
             <div className="h-2 rounded-full bg-muted overflow-hidden">
               <div
