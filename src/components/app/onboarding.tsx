@@ -56,7 +56,7 @@ export function Onboarding() {
   useEffect(() => {
     let cancelled = false;
     statusFn()
-      .then((res: any) => {
+      .then((res) => {
         if (cancelled || res?.completed) return;
         setStartIndex(readStoredStep());
         setShow(true);
