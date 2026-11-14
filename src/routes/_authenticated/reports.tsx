@@ -108,7 +108,7 @@ function ReportsPage() {
         .select("*, repositories(full_name)")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as any[];
+      return data;
     },
   });
 

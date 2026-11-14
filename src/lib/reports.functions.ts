@@ -1,4 +1,5 @@
 import type { AdminClient } from "@/lib/supabase-admin.server";
+import type { Tables } from "@/integrations/supabase/types";
 
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -23,14 +24,8 @@ async function buildPayload(supabaseAdmin: AdminClient, scanId: string, userId: 
   // Every finding present in this scan, not just the ones it detected first —
   // findings carry across scans, so a re-scan's report would otherwise be empty.
   const { findingsForScans } = await import("@/lib/vuln-lifecycle.server");
-  const { rows } = await findingsForScans<{ id: string; scan_id: string | null }>(
-    supabaseAdmin,
-    [scanId],
-    "*",
-  );
-  const list = [...(rows as any[])].sort(
-    (a, b) => (Number(b.cvss_score) || 0) - (Number(a.cvss_score) || 0),
-  );
+  const { rows } = await findingsForScans<Tables<"vulnerabilities">>(supabaseAdmin, [scanId], "*");
+  const list = [...rows].sort((a, b) => (Number(b.cvss_score) || 0) - (Number(a.cvss_score) || 0));
   const counts: Record<Sev, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const v of list) counts[(v.severity as Sev) ?? "info"] += 1;
 
@@ -150,5 +145,5 @@ export const listCompletedScans = createServerFn({ method: "GET" })
       .eq("status", "completed")
       .order("completed_at", { ascending: false })
       .limit(50);
-    return (data ?? []) as any[];
+    return data ?? [];
   });
