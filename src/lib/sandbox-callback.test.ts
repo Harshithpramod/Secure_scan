@@ -22,6 +22,7 @@ function makeQuery(table: string, mode: "update" | "select", update: Record<stri
   const entry: Recorded = { table, update, eq: {} };
   if (mode === "update") recorded.push(entry);
   else selects.push(entry);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- thenable query-builder stub
   const chain: any = {
     eq(col: string, val: unknown) {
       entry.eq[col] = val;
@@ -29,7 +30,7 @@ function makeQuery(table: string, mode: "update" | "select", update: Record<stri
     },
     select: () => (mode === "update" ? Promise.resolve(updateResult) : chain),
     maybeSingle: () => Promise.resolve({ data: selectRow, error: null }),
-    then: (res: any) => Promise.resolve(updateResult).then(res),
+    then: (res: (v: typeof updateResult) => unknown) => Promise.resolve(updateResult).then(res),
   };
   return chain;
 }
