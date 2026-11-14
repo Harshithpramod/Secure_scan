@@ -43,7 +43,7 @@ There is also a fully simulated **live demo** at `/demo` requiring no sign-in.
 | Static analysis | CodeQL + Semgrep (bundled offline rules)                                |
 | AI              | Google Gemini (scanning + chat), OpenRouter (AI fixes only)             |
 | Email           | nodemailer over SMTP                                                    |
-| Tests           | Vitest (~184 tests)                                                     |
+| Tests           | Vitest (~210 tests)                                                     |
 | Tooling         | TypeScript, ESLint (flat config), Prettier                              |
 
 ---
@@ -454,8 +454,9 @@ weekly run. It:
 3. claims the send by inserting into `weekly_digest_log` (a 23505 unique-violation means someone else already won — skip silently),
 4. builds and sends the email via `email.server.ts`.
 
-No timeout fallback is needed: the sandbox guarantees a terminal callback for
-every job it accepts, including worker exceptions, so nothing waits forever.
+The sandbox sends a terminal callback for every job it accepts, including
+worker exceptions. A job lost to a worker restart is timed out by
+`stale-jobs.server.ts`, which then re-checks the run's digest.
 
 Email failures are caught and logged — they must never fail the scan write.
 
@@ -571,8 +572,12 @@ not an exact key. Two different issues at the same spot with similar titles can
 be merged; a heavily re-worded one can appear as new. Resolution requires two
 consecutive misses for the same reason.
 
-**Dropped jobs are never retried.** A worker restart mid-job leaves the scan
-`running` with nothing to move it on. This is also why Redis does not persist.
+**Dropped jobs are timed out, not retried.** A worker restart mid-job loses
+the job (Redis does not persist). `stale-jobs.server.ts` fails a scan with no
+sign of life for 45 minutes, a pending fix after 30, and a pending verification
+after 120, so nothing stays `running` forever or blocks the next scan — but the
+user has to start it again. It runs on the worker's hourly ping and before each
+new scan or fix.
 
 **AI fixes are re-scanned, not tested.** A PR opens only if a re-scan with the
 patch applied no longer reports the finding, but nothing is compiled or
@@ -586,17 +591,10 @@ that ever matters, is contained to `email.server.ts`.
 **Weekly scheduling is coarse.** Rolling "every N hours since last scan" only.
 `schedule_day` / `schedule_hour` / `timezone` exist in the schema but are unwired.
 
-**Test coverage is targeted, not broad.** ~184 tests cover token encryption,
+**Test coverage is targeted, not broad.** ~210 tests cover token encryption,
 callback binding rules, the weekly sweep and digest, the scan pipeline's pure
 functions, the fix gate, log redaction, and the lifecycle rules. React components and the GitHub/OpenRouter integration paths are
 untested.
-
-**Leftover SQL and a dead client.** `pentestai_security_hardening.sql` (repo
-root, outside `migrations/`) still creates policies on `api_keys`, which a
-later migration dropped, so it errors if run as-is.
-`integrations/supabase/client.server.ts` exports a second service-role client
-(reading `SUPABASE_SERVICE_ROLE_KEY`) that nothing imports. The real one is
-`lib/supabase-admin.server.ts`.
 
 **Caddy ships TLS config** but needs real DNS pointed at the host before it can
 issue a certificate.
