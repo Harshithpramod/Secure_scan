@@ -21,6 +21,10 @@ export const startScan = createServerFn({ method: "POST" })
     const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
     const supabaseAdmin = getSupabaseAdmin();
 
+    // Clear out work the sandbox never reported on, so a dead job can't block this one.
+    const { reapStaleJobsQuietly } = await import("@/lib/stale-jobs.server");
+    await reapStaleJobsQuietly(supabaseAdmin);
+
     const result = await triggerScan(supabaseAdmin, {
       repositoryId: data.repositoryId,
       userId: context.userId,

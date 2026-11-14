@@ -48,6 +48,10 @@ export const requestVulnerabilityFix = createServerFn({ method: "POST" })
     const { getUserAccessToken } = await import("@/lib/github-token.server");
     const supabaseAdmin = getSupabaseAdmin();
 
+    // Clear out work the sandbox never reported on, so a dead job can't block this one.
+    const { reapStaleJobsQuietly } = await import("@/lib/stale-jobs.server");
+    await reapStaleJobsQuietly(supabaseAdmin);
+
     // Scoped to the caller. The admin client bypasses RLS, so this .eq is the
     // only thing keeping one user from requesting a fix on another's finding.
     const { data: vuln, error: vulnErr } = await supabaseAdmin
