@@ -33,12 +33,10 @@ export async function maybeSendWeeklyDigest(
   if (scansErr) throw scansErr;
   if (!scans || scans.length === 0) return;
 
-  const allScansTerminal = scans.every(
-    (s: any) => s.status === "completed" || s.status === "failed",
-  );
+  const allScansTerminal = scans.every((s) => s.status === "completed" || s.status === "failed");
   if (!allScansTerminal) return;
 
-  const scanIds = scans.map((s: any) => s.id);
+  const scanIds = scans.map((s) => s.id);
   // Findings carry across scans now, so "this week's findings" means the ones
   // each scan saw, not only the ones it saw first.
   const { findingsForScans } = await import("@/lib/vuln-lifecycle.server");
@@ -48,9 +46,7 @@ export async function maybeSendWeeklyDigest(
     "id, scan_id, title, severity, verification_status, cwe_id, file_path, line_start, description",
   );
 
-  const anyPendingVerification = (vulns ?? []).some(
-    (v: any) => v.verification_status === "pending",
-  );
+  const anyPendingVerification = (vulns ?? []).some((v) => v.verification_status === "pending");
   if (anyPendingVerification) return;
 
   // Checked BEFORE claiming: an opted-out user shouldn't get a
@@ -96,7 +92,18 @@ type DigestVuln = {
   description: string | null;
 };
 
-function buildDigest(scans: any[], vulns: DigestVuln[], presentIn: (v: DigestVuln) => Set<string>) {
+type DigestScan = {
+  id: string;
+  status: string;
+  security_score: number | null;
+  repositories: { full_name: string } | null;
+};
+
+function buildDigest(
+  scans: DigestScan[],
+  vulns: DigestVuln[],
+  presentIn: (v: DigestVuln) => Set<string>,
+) {
   const appUrl = (process.env.APP_URL ?? "").replace(/\/$/, "");
   const link = (path: string) => (appUrl ? `${appUrl}${path}` : path);
 
@@ -112,7 +119,7 @@ function buildDigest(scans: any[], vulns: DigestVuln[], presentIn: (v: DigestVul
       : "No high or critical findings this week";
 
   const repoRows = scans
-    .map((s: any) => {
+    .map((s) => {
       const repoFindings = vulns.filter((v) => presentIn(v).has(s.id));
       const name = s.repositories?.full_name ?? "Repository";
       if (s.status === "failed") return `<li>${escapeHtml(name)} — scan failed</li>`;
@@ -124,7 +131,7 @@ function buildDigest(scans: any[], vulns: DigestVuln[], presentIn: (v: DigestVul
 
   const confirmedRows = confirmed
     .map(
-      (v: any) =>
+      (v) =>
         `<li><strong>${escapeHtml(v.title)}</strong> (${escapeHtml(v.severity)}${v.cwe_id ? `, ${escapeHtml(v.cwe_id)}` : ""})${v.file_path ? ` — <code>${escapeHtml(v.file_path)}${v.line_start ? `:${v.line_start}` : ""}</code>` : ""}</li>`,
     )
     .join("\n");
@@ -159,14 +166,14 @@ function buildDigest(scans: any[], vulns: DigestVuln[], presentIn: (v: DigestVul
     `${reposScanned} repositories scanned, ${totalFindings} finding(s) total.`,
     "",
     "By repository:",
-    ...scans.map((s: any) => {
+    ...scans.map((s) => {
       const name = s.repositories?.full_name ?? "Repository";
       return s.status === "failed"
         ? `- ${name}: scan failed`
         : `- ${name}: score ${s.security_score ?? "—"}/100`;
     }),
     ...(confirmed.length > 0
-      ? ["", "Confirmed exploitable:", ...confirmed.map((v: any) => `- ${v.title} (${v.severity})`)]
+      ? ["", "Confirmed exploitable:", ...confirmed.map((v) => `- ${v.title} (${v.severity})`)]
       : []),
     "",
     appUrl ? `View all findings: ${link("/vulnerabilities")}` : "",

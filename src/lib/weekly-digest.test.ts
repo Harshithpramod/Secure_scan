@@ -26,6 +26,7 @@ let userEmail: string | null = "user@example.com";
 let digestLogRows: Array<{ weekly_run_id: string; user_id: string }> = [];
 
 function makeQuery(table: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- self-referencing query-builder stub
   const chain: any = {
     _filters: {} as Record<string, unknown>,
     eq(col: string, val: unknown) {
@@ -50,7 +51,7 @@ function makeQuery(table: string) {
       return Promise.resolve({ data: null, error: null });
     },
     // Awaiting the chain directly (no maybeSingle) is how scans/vulnerabilities are read.
-    then(resolve: any) {
+    then(resolve: (v: unknown) => unknown) {
       if (table === "scans") {
         return Promise.resolve({ data: scans, error: null }).then(resolve);
       }
