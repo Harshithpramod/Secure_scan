@@ -104,13 +104,14 @@ function SettingsPage() {
     onMutate: async ({ key, value }) => {
       await qc.cancelQueries({ queryKey: ["settings"] });
       const prev = qc.getQueryData(["settings"]);
-      qc.setQueryData(["settings"], (old: any) =>
-        old ? { ...old, prefs: { ...(old.prefs ?? {}), [key]: value } } : old,
+      qc.setQueryData<typeof data>(["settings"], (old) =>
+        // No prefs row yet: skip the optimistic flip; onSuccess refetches the real row.
+        old?.prefs ? { ...old, prefs: { ...old.prefs, [key]: value } } : old,
       );
       return { prev };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
-    onError: (e: Error, _v, ctx: any) => {
+    onError: (e: Error, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(["settings"], ctx.prev);
       toast.error(e.message);
     },
@@ -250,7 +251,7 @@ function GithubSection() {
         <div className="flex items-center justify-between rounded-md border border-border p-3">
           <div className="flex items-center gap-2 text-sm">
             <CheckCircle2 className="h-4 w-4 text-severity-low" />
-            Connected as <span className="font-medium">{(status as any).github_username}</span>
+            Connected as <span className="font-medium">{status.github_username}</span>
           </div>
           <Button
             variant="outline"
