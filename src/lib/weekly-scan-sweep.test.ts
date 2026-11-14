@@ -8,6 +8,7 @@ let reposError: unknown = null;
 const supabaseStub = {
   from: (table: string) => {
     if (table !== "repositories") throw new Error(`unexpected table ${table}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- self-referencing query-builder stub
     const chain: any = {
       select: () => chain,
       eq: () => chain,
@@ -20,6 +21,9 @@ const supabaseStub = {
 vi.mock("@/lib/supabase-admin.server", () => ({
   getSupabaseAdmin: () => supabaseStub,
 }));
+
+// Covered by stale-jobs.test.ts; this stub only knows the repositories table.
+vi.mock("@/lib/stale-jobs.server", () => ({ reapStaleJobsQuietly: async () => {} }));
 
 const triggerScanMock = vi.fn();
 vi.mock("@/lib/scan-trigger.server", () => ({

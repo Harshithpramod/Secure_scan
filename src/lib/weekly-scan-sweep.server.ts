@@ -32,6 +32,10 @@ export async function handleWeeklySweepRequest(request: Request): Promise<Respon
   const { getSupabaseAdmin } = await import("@/lib/supabase-admin.server");
   const supabaseAdmin = getSupabaseAdmin();
 
+  // This hourly ping doubles as the clock for timing out dead jobs.
+  const { reapStaleJobsQuietly } = await import("@/lib/stale-jobs.server");
+  await reapStaleJobsQuietly(supabaseAdmin);
+
   // The worker pings this endpoint on a fixed schedule with no memory of when
   // it last actually triggered anything (the sandbox's Redis isn't persisted
   // — see docker-compose.yml — so the worker can't reliably remember that
