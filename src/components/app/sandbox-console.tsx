@@ -254,7 +254,11 @@ export function SandboxConsole({
         className="max-h-96 overflow-y-auto px-3 py-2.5"
       >
         {run ? (
-          <ol role="log" aria-live="polite" className="space-y-1 font-mono text-[0.71875rem] leading-5">
+          <ol
+            role="log"
+            aria-live="polite"
+            className="space-y-1 font-mono text-[0.71875rem] leading-5"
+          >
             {run.lines.map((line) => {
               const m = ATTEMPT_START.exec(line.message);
               return (

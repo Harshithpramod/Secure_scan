@@ -821,7 +821,9 @@ export function DemoActivity() {
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <SeverityBadge severity={v.severity} className="text-[0.625rem]" />
-                <span className="text-[0.6875rem] text-muted-foreground">{timeAgo(v.detected_at)}</span>
+                <span className="text-[0.6875rem] text-muted-foreground">
+                  {timeAgo(v.detected_at)}
+                </span>
               </div>
             </div>
           </li>
