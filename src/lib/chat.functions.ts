@@ -148,8 +148,8 @@ export const askSecurityAssistant = createServerFn({ method: "POST" })
           : { kind: "none", repositoryId: "", repositoryName: "" };
 
       return { reply, action };
-    } catch (err: any) {
-      const message = String(err?.message ?? err);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error("[chat] askSecurityAssistant failed:", err);
       return {
         reply: `I couldn't answer that. ${message}`,

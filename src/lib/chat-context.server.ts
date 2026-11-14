@@ -49,7 +49,10 @@ function mentions(haystack: string, name: string): boolean {
   return new RegExp(`(^|[^a-z0-9])${escapeRegExp(name)}([^a-z0-9]|$)`, "i").test(haystack);
 }
 
-function resolveRepo(repos: any[], repoHint: string | null | undefined) {
+function resolveRepo<R extends { full_name: string; name: string }>(
+  repos: R[],
+  repoHint: string | null | undefined,
+) {
   const hint = repoHint?.trim().toLowerCase();
   if (!hint) return undefined;
 
@@ -100,9 +103,9 @@ export async function buildSecurityContext(
       .limit(20),
   ]);
 
-  const repos = (repoRows ?? []) as any[];
-  const openVulns = (openVulnRows ?? []) as any[];
-  const scans = (scanRows ?? []) as any[];
+  const repos = repoRows ?? [];
+  const openVulns = openVulnRows ?? [];
+  const scans = scanRows ?? [];
 
   // Resolve the hint to a single repository so "is this one secure?" can be
   // answered without the model guessing which repo the user means. The hint is
