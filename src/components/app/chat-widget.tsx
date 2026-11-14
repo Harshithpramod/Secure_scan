@@ -204,14 +204,14 @@ export function ChatWidget() {
           messages: history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
         },
       }),
-    onSuccess: (res: any) => {
+    onSuccess: (res) => {
       setMessages((prev) => [
         ...prev,
         {
           id: newId(),
           role: "assistant",
           content: res.reply,
-          error: Boolean(res.error),
+          error: "error" in res && Boolean(res.error),
           scan:
             res.action?.kind === "start_scan"
               ? {
@@ -252,7 +252,7 @@ export function ChatWidget() {
       );
       return scanFn({ data: { repositoryId: vars.repositoryId } });
     },
-    onSuccess: (res: any, vars) => {
+    onSuccess: (res, vars) => {
       qc.invalidateQueries({ queryKey: ["repositories"] });
       qc.invalidateQueries({ queryKey: ["scans"] });
       qc.invalidateQueries({ queryKey: ["vulnerabilities"] });
@@ -265,10 +265,11 @@ export function ChatWidget() {
         {
           id: newId(),
           role: "assistant",
-          content: `Scan finished — **${res.findings}** finding(s), security score **${res.score}/100**. [Open the scan detail](/scans/${res.scanId})`,
+          // startScan only queues the job; findings arrive later via the sandbox callback.
+          content: `Scan queued — the sandbox is running it now. [Follow its progress](/scans/${res.scanId})`,
         },
       ]);
-      toast.success(`Scan complete — ${res.findings} finding(s)`);
+      toast.success("Scan queued");
     },
     onError: (e: Error, vars) => {
       setMessages((prev) =>
