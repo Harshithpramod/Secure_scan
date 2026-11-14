@@ -292,11 +292,36 @@ describe("analyzeFiles — transient AI errors", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("gives up after the configured retries", async () => {
+  it("gives up after the configured retries on both the model and its fallback", async () => {
+    vi.stubEnv("SCAN_FALLBACK_MODEL", "fb");
+    const fetch = vi.fn().mockImplementation(async () => err(503));
+    vi.stubGlobal("fetch", fetch);
+    await expect(analyzeFiles("k", "m", files, opts)).rejects.toThrow("AI gateway error 503");
+    expect(fetch).toHaveBeenCalledTimes(6);
+    vi.unstubAllEnvs();
+  });
+
+  it("switches to the fallback model when the main one stays overloaded", async () => {
+    vi.stubEnv("SCAN_FALLBACK_MODEL", "fb");
+    const fetch = vi
+      .fn()
+      .mockImplementation(async (_url, init) =>
+        JSON.parse(init.body).model === "fb" ? ok([]) : err(503),
+      );
+    vi.stubGlobal("fetch", fetch);
+    const r = await analyzeFiles("k", "m", files, opts);
+    expect(r.findings).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(4);
+    vi.unstubAllEnvs();
+  });
+
+  it("does not fall back when disabled", async () => {
+    vi.stubEnv("SCAN_FALLBACK_MODEL", "none");
     const fetch = vi.fn().mockImplementation(async () => err(503));
     vi.stubGlobal("fetch", fetch);
     await expect(analyzeFiles("k", "m", files, opts)).rejects.toThrow("AI gateway error 503");
     expect(fetch).toHaveBeenCalledTimes(3);
+    vi.unstubAllEnvs();
   });
 
   it("does not retry a non-transient error", async () => {
@@ -384,6 +409,7 @@ describe("daily quota", () => {
   });
 
   it("fails immediately on a daily quota instead of waiting out a useless retryDelay", async () => {
+    vi.stubEnv("SCAN_FALLBACK_MODEL", "none");
     const fetch = vi.fn().mockImplementation(async () => new Response(dailyBody, { status: 429 }));
     vi.stubGlobal("fetch", fetch);
     try {
@@ -397,6 +423,7 @@ describe("daily quota", () => {
       expect(Date.now() - started).toBeLessThan(1000);
     } finally {
       vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
     }
   });
 });

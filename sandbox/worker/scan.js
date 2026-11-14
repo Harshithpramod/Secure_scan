@@ -15,6 +15,7 @@
 const GITHUB_API = "https://api.github.com";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash";
 
 export const SCANNABLE_EXTS = [
   "js",
@@ -334,7 +335,7 @@ export function parseRetryDelayMs(body) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function callAI(apiKey, model, messages) {
+async function postWithRetry(apiKey, model, messages) {
   const body = JSON.stringify({
     model,
     messages,
@@ -349,6 +350,8 @@ async function callAI(apiKey, model, messages) {
   let errText = "";
   for (let attempt = 0; ; attempt++) {
     res = await fetch(GEMINI_URL, {
+      // A hung request (seen live on a busy model) would otherwise leave the scan "analyzing" forever.
+      signal: AbortSignal.timeout(180_000),
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body,
@@ -361,6 +364,20 @@ async function callAI(apiKey, model, messages) {
     if (isDailyQuotaError(errText)) break;
     const hinted = parseRetryDelayMs(errText);
     await sleep(Math.min(hinted ?? aiRetry.delaysMs[attempt], aiRetry.maxDelayMs));
+  }
+  return { res, errText };
+}
+
+async function callAI(apiKey, primary, messages) {
+  let model = primary;
+  let { res, errText } = await postWithRetry(apiKey, model, messages);
+
+  // "High demand" 503s and free-tier quotas are per model, so a different model
+  // usually still has room. Seen live: gemini-2.5-flash 503'd a scan through every retry.
+  const fallback = resolveFallbackModel();
+  if (!res.ok && TRANSIENT_STATUSES.has(res.status) && fallback && fallback !== model) {
+    model = fallback;
+    ({ res, errText } = await postWithRetry(apiKey, model, messages));
   }
 
   if (!res.ok) {
@@ -446,6 +463,12 @@ export function sanitizeFindings(findings) {
 
 export function resolveScanModel() {
   return process.env.SCAN_MODEL || DEFAULT_MODEL;
+}
+
+/** Tried once when the scan model stays overloaded or out of quota. "none" disables it. */
+export function resolveFallbackModel() {
+  const v = process.env.SCAN_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL;
+  return v === "none" ? null : v;
 }
 
 /**
