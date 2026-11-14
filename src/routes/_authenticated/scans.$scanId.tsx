@@ -30,7 +30,7 @@ function ScanDetailPage() {
     queryKey: ["scan-detail", scanId, tick],
     queryFn: () => getScanDetail({ data: { scanId } }),
     refetchInterval: (q) => {
-      const status = (q.state.data as any)?.scan?.status;
+      const status = q.state.data?.scan?.status;
       return status === "running" || status === "queued" ? 1500 : false;
     },
   });
@@ -50,8 +50,8 @@ function ScanDetailPage() {
     };
   }, [scanId]);
 
-  const scan = (data as any)?.scan;
-  const logs = ((data as any)?.logs ?? []) as Array<{
+  const scan = data?.scan;
+  const logs = (data?.logs ?? []) as Array<{
     id: string;
     stage: string;
     level: string;
@@ -163,7 +163,7 @@ function ScanDetailPage() {
   );
 }
 
-function Stat({ label, value, tint }: { label: string; value: any; tint?: string }) {
+function Stat({ label, value, tint }: { label: string; value: React.ReactNode; tint?: string }) {
   const tintClass =
     tint === "critical"
       ? "text-critical"

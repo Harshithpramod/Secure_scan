@@ -29,7 +29,7 @@ function ScansPage() {
     // Scans run in the sandbox now, so the row changes without this tab doing
     // anything. Poll only while something is actually in flight.
     refetchInterval: (q) => {
-      const items = (q.state.data as any[]) ?? [];
+      const items = q.state.data ?? [];
       const inFlight = items.some((s) => s.status === "queued" || s.status === "running");
       return inFlight ? 3000 : false;
     },

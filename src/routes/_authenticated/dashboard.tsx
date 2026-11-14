@@ -109,9 +109,9 @@ function Dashboard() {
           .limit(6),
       ]);
       return {
-        repos: (repos.data ?? []) as any[],
-        vulns: (vulns.data ?? []) as any[],
-        scans: (scans.data ?? []) as any[],
+        repos: repos.data ?? [],
+        vulns: vulns.data ?? [],
+        scans: scans.data ?? [],
       };
     },
   });
