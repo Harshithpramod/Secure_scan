@@ -17,7 +17,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Not npm ci: a lock file written on Windows omits Linux-only optional
+      # packages (@emnapi/runtime), which npm ci rejects as out of sync.
+      - run: npm install --no-audit --no-fund
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm test
