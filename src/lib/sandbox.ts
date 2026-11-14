@@ -98,8 +98,12 @@ async function postJob(payload: Record<string, unknown>): Promise<{ job_id: stri
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Sandbox request failed (${response.status}): ${errorText}`);
+    const errorText = (await response.text()).slice(0, 300);
+    // HTML means SANDBOX_URL hit a web server (usually this app on a stray port), not the sandbox API.
+    const detail = errorText.trimStart().startsWith("<")
+      ? `${sandboxUrl} returned an HTML page, not the sandbox API — check SANDBOX_URL and that Caddy is published on that port`
+      : errorText;
+    throw new Error(`Sandbox request failed (${response.status}): ${detail}`);
   }
 
   return response.json() as Promise<{ job_id: string }>;
