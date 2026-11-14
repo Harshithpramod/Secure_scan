@@ -17,6 +17,9 @@ export default defineConfig({
   vite: {
     server: {
       allowedHosts: ["host.docker.internal"],
+      // A second dev server must fail, not slide onto 8081 — that's the sandbox's
+      // Caddy port, and the app would then post scan jobs to itself (404).
+      strictPort: true,
     },
   },
 });
